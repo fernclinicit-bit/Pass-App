@@ -1,0 +1,13 @@
+{
+  "name": "passly-password-request",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Password request workflow from LINE to a web admin dashboard",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

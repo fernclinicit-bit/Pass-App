@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: passly-password-request
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LARK_WEBHOOK_URL
+        sync: false
