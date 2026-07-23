@@ -10,7 +10,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
-      - key: LINE_CHANNEL_SECRET
-        sync: false
-      - key: LARK_WEBHOOK_URL
-        sync: false
+      - key: NODE_ENV
+        value: production

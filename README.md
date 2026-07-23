@@ -44,8 +44,12 @@ https://YOUR-DOMAIN/api/line/webhook
 โปรเจกต์มี `render.yaml` สำหรับสร้าง Web Service:
 
 1. เปิด Render Blueprint จาก repository นี้
-2. กรอก `LINE_CHANNEL_SECRET` และ `LARK_WEBHOOK_URL` ในหน้า Environment
-3. เมื่อ deploy สำเร็จ ตั้งค่า LINE Webhook URL เป็น
+2. เมื่อ deploy สำเร็จ เพิ่ม `LINE_CHANNEL_SECRET` และ `LARK_WEBHOOK_URL`
+   ในหน้า Environment ของบริการ
+3. ตั้งค่า LINE Webhook URL เป็น
    `https://YOUR-SERVICE.onrender.com/api/line/webhook`
+
+เมื่อยังไม่ได้ตั้ง `LINE_CHANNEL_SECRET` ระบบ production จะปฏิเสธ LINE webhook
+เพื่อป้องกันคำขอปลอม แต่หน้าเว็บยังเปิดใช้งานได้ตามปกติ
 
 > แผน Free เก็บไฟล์คำขอใน filesystem ชั่วคราว ข้อมูลอาจถูกล้างเมื่อ service restart หรือ deploy ใหม่

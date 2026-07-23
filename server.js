@@ -48,7 +48,7 @@ function writeRequests(requests) {
 
 function verifyLineSignature(raw, signature) {
   const secret = process.env.LINE_CHANNEL_SECRET;
-  if (!secret) return true;
+  if (!secret) return process.env.NODE_ENV !== 'production';
   const expected = crypto.createHmac('sha256', secret).update(raw).digest('base64');
   const actualBuffer = Buffer.from(signature || '');
   const expectedBuffer = Buffer.from(expected);
@@ -127,7 +127,11 @@ http.createServer(async (req, res) => {
       return await handleLark(req, res);
     }
     if (req.method === 'GET' && req.url === '/api/health') {
-      return send(res, 200, JSON.stringify({ ok: true, lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET) }));
+      return send(res, 200, JSON.stringify({
+        ok: true,
+        lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET),
+        larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
+      }));
     }
 
     const target = req.url === '/' ? '/index.html' : req.url.split('?')[0];
