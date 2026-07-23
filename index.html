@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f4f6f1" />
+  <title>Passly — ระบบคำขอ Password</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Passly home">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span>passly</span>
+      </a>
+
+      <nav class="nav" aria-label="เมนูหลัก">
+        <a class="nav-item active" data-view="overview" href="#overview"><span class="nav-icon">⌂</span> ภาพรวม</a>
+        <a class="nav-item" data-view="requests" href="#codes"><span class="nav-icon">◇</span> คำขอทั้งหมด <span class="nav-count" id="navCount">0</span></a>
+        <a class="nav-item" data-view="vault" href="#vault"><span class="nav-icon">▣</span> คลังบัญชี <span class="nav-count" id="vaultCount">20</span></a>
+        <a class="nav-item" data-view="settings" href="#settings"><span class="nav-icon">⚙</span> ตั้งค่าช่องทาง</a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="usage-card">
+          <div class="usage-head"><span>พื้นที่ใช้งาน</span><strong id="usageText">0 / 100</strong></div>
+          <div class="progress"><i id="usageBar"></i></div>
+          <small>แพ็กเกจเริ่มต้น</small>
+        </div>
+        <button class="user-card" type="button">
+          <span class="avatar">FN</span>
+          <span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span>
+          <span class="dots">•••</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuBtn" aria-label="เปิดเมนู">☰</button>
+        <div class="page-title"><span>Workspace</span><b>/</b><strong>ภาพรวม</strong></div>
+        <div class="top-actions">
+          <button class="icon-btn" id="themeBtn" aria-label="เปลี่ยนธีม">☼</button>
+          <button class="primary-btn" id="openModal"><span>＋</span> เพิ่มคำขอ</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <aside class="line-alert" id="lineAlert">
+          <span class="line-logo">LINE</span>
+          <div><strong>กำลังตรวจสอบคำขอจาก LINE</strong><small id="lineStatus">เชื่อมต่อกับระบบแจ้งเตือนบนเว็บ</small></div>
+          <button id="enableNotifications">เปิดแจ้งเตือนเดสก์ท็อป</button>
+        </aside>
+        <div class="hero-row" id="overview">
+          <div>
+            <p class="eyebrow">Password request center</p>
+            <h1>สวัสดี, Fern <span>✦</span></h1>
+            <p class="subtitle">รับคำขอ อนุมัติ และติดตามการแจก password อย่างเป็นระบบ</p>
+          </div>
+          <div class="date-pill" id="today"></div>
+        </div>
+
+        <section class="stats-grid" aria-label="สถิติรหัส">
+          <article class="stat-card accent">
+            <div class="stat-top"><span class="stat-icon">◇</span><span class="trend">คำขอทั้งหมด</span></div>
+            <div class="stat-value" id="totalStat">0</div>
+            <p><b id="newStat">0 รายการใหม่</b> ที่รอดำเนินการ</p>
+            <div class="spark-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon green">✓</span><span class="trend positive">อนุมัติแล้ว</span></div>
+            <div class="stat-value" id="activeStat">0</div>
+            <p>คำขอที่อนุมัติให้เข้าถึง</p>
+            <div class="mini-line green-line"></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon purple">↗</span><span class="trend">แจกสำเร็จ</span></div>
+            <div class="stat-value" id="sentStat">0</div>
+            <p>ผู้รับยืนยันว่าได้รับแล้ว</p>
+            <div class="mini-line purple-line"></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon orange">◷</span><span class="trend warning">รออนุมัติ</span></div>
+            <div class="stat-value" id="expiringStat">0</div>
+            <p>คำขอที่ต้องตรวจสอบ</p>
+            <div class="mini-line orange-line"></div>
+          </article>
+        </section>
+
+        <section class="codes-section" id="codes">
+          <div class="section-head">
+            <div><h2>คำขอ Password ล่าสุด</h2><p>อนุมัติหรือปฏิเสธก่อนส่งข้อมูลให้ผู้ร้องขอ</p></div>
+            <div class="table-actions">
+              <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="ค้นหาผู้ขอหรือระบบ" /></label>
+              <select id="statusFilter" aria-label="กรองสถานะ">
+                <option value="all">ทุกสถานะ</option>
+                <option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ผู้ร้องขอ</th><th>บัญชี / ระบบ</th><th>วัตถุประสงค์</th><th>วันที่ขอ</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
+              <tbody id="codesBody"></tbody>
+            </table>
+            <div class="empty-state" id="emptyState" hidden>
+              <div>◇</div><h3>ยังไม่พบคำขอ</h3><p>ลองเปลี่ยนคำค้นหา หรือเพิ่มคำขอใหม่</p>
+            </div>
+          </div>
+          <div class="table-footer"><span id="resultCount">แสดง 0 รายการ</span><button id="showAllBtn">ดูทั้งหมด →</button></div>
+        </section>
+
+        <section class="manage-section" id="vault">
+          <div class="section-head"><div><h2>คลังบัญชีและระบบ</h2><p>เพิ่ม แก้ไข หรือลบชื่อระบบที่ผู้ใช้สามารถร้องขอได้</p></div><button class="primary-btn" id="addSystemBtn"><span>＋</span> เพิ่มระบบ</button></div>
+          <div class="system-grid" id="systemGrid"></div>
+        </section>
+
+        <section class="manage-section" id="settings">
+          <div class="section-head"><div><h2>รับคำขอจาก LINE</h2><p>ผู้ใช้ส่ง “ขอรหัส ชื่อระบบ” มาที่ LINE OA แล้วเว็บจะแจ้งเตือนอัตโนมัติ</p></div><span class="channel-badge">LINE → WEB</span></div>
+          <div class="line-settings">
+            <label>Webhook endpoint<input id="lineEndpoint" readonly value="/api/line/webhook" /></label>
+            <div class="message-example"><strong>ตัวอย่างข้อความจากผู้ใช้</strong><code>ขอรหัส Google Workspace<br>เหตุผล: ใช้งานเอกสารของทีม Marketing</code></div>
+            <p class="security-note">ตั้งค่า <code>LINE_CHANNEL_SECRET</code> บน server เพื่อยืนยันลายเซ็น webhook ก่อนเปิดใช้งานจริง</p>
+          </div>
+          <div class="section-head"><div><h2>ตั้งค่าการส่งเข้า Lark Chat</h2><p>Webhook จะใช้สำหรับส่ง password หลังผู้ดูแลอนุมัติเท่านั้น</p></div></div>
+          <form class="settings-form" id="larkForm">
+            <label>Lark Custom Bot Webhook<input id="larkWebhook" type="url" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/..." /></label>
+            <label>คำขึ้นต้นข้อความ<input id="larkPrefix" value="[Passly] ข้อมูลการเข้าใช้งาน" /></label>
+            <div class="settings-actions"><button class="primary-btn" type="submit">บันทึกการตั้งค่า</button><button class="secondary-btn" type="button" id="testLarkBtn">ส่งข้อความทดสอบ</button></div>
+            <p class="security-note">🔒 Password จะถูกส่งครั้งเดียวและไม่ถูกบันทึกลงในประวัติคำขอ</p>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="editModal" hidden><section class="modal" role="dialog"><button class="modal-close" id="closeEditModal">×</button><div class="modal-symbol">✎</div><p class="eyebrow">Edit request</p><h2>แก้ไขคำขอ</h2><form id="editForm"><input name="id" type="hidden" /><label>ชื่อผู้ร้องขอ<input name="name" required /></label><label>อีเมล / ช่องทางติดต่อ<input name="email" required /></label><label>บัญชี / ระบบ<select name="system" id="editSystemSelect"></select></label><label>เหตุผล<textarea name="reason" required rows="3"></textarea></label><label>สถานะ<select name="status"><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option></select></label><label class="check-row"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label><button class="primary-btn full" type="submit">บันทึกการแก้ไข</button></form></section></div>
+
+  <div class="modal-backdrop" id="sendModal" hidden><section class="modal" role="dialog"><button class="modal-close" id="closeSendModal">×</button><div class="modal-symbol">↗</div><p class="eyebrow">Lark delivery</p><h2>ส่ง Password เข้า Lark</h2><p class="modal-copy" id="sendSummary"></p><form id="sendForm"><input name="id" type="hidden" /><label>Username<input name="username" required autocomplete="off" /></label><label>Password<input name="password" type="password" required autocomplete="new-password" /></label><label class="check-row"><input name="showPassword" type="checkbox" /><span>แสดง password ขณะตรวจสอบ</span></label><button class="primary-btn full" type="submit">ส่งเข้า Lark Chat <span>→</span></button></form></section></div>
+
+  <div class="modal-backdrop" id="modal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" id="closeModal" aria-label="ปิด">×</button>
+      <div class="modal-symbol">✦</div>
+      <p class="eyebrow">Password request</p><h2 id="modalTitle">บันทึกคำขอ Password</h2><p class="modal-copy">ระบุผู้ร้องขอ บัญชีที่ต้องการ และเหตุผลเพื่อส่งให้ผู้ดูแลอนุมัติ</p>
+      <form id="codeForm">
+        <div class="field-row">
+          <label>ชื่อผู้ร้องขอ<input name="name" required placeholder="เช่น สมชาย ใจดี" autocomplete="name" /></label><label>อีเมล / ช่องทางติดต่อ<input name="email" required placeholder="name@example.com" autocomplete="email" /></label>
+        </div>
+        <label>บัญชี / ระบบที่ต้องการ<select name="system" id="systemSelect" required></select></label><label>เหตุผลและวัตถุประสงค์<textarea name="reason" required rows="3" placeholder="อธิบายว่าจะนำไปใช้ทำอะไร"></textarea></label><label class="check-row"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label><button class="primary-btn full" type="submit">ส่งคำขอ <span>→</span></button>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p><strong id="toastTitle">สำเร็จ</strong><small id="toastMessage"></small></p></div>
+  <script src="app.js"></script>
+</body>
+</html>
