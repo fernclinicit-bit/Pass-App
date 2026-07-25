@@ -39,6 +39,21 @@ https://YOUR-DOMAIN/api/line/webhook
 
 ไฟล์ข้อมูลคำขอและค่า secret ถูกตัดออกจาก Git ผ่าน `.gitignore`
 
+## ใช้งานในกลุ่ม LINE “บัญชี 1”
+
+1. เปิด `Allow bot to join group chats` ใน LINE Developers Console
+2. เชิญ LINE Official Account เข้ากลุ่ม “บัญชี 1”
+3. เมื่อบอตเข้ากลุ่ม บอตจะส่งปุ่ม Quick Reply สำหรับเลือกระบบ
+4. หากปุ่มหาย ให้สมาชิกพิมพ์ `เมนู` หรือ `ขอรหัส`
+5. เมื่อสมาชิกกดชื่อระบบ คำขอจะขึ้นหน้าเว็บและบอตตอบยืนยันในกลุ่ม
+
+กำหนด Environment variables:
+
+- `LINE_CHANNEL_SECRET` — ตรวจสอบว่า webhook มาจาก LINE จริง
+- `LINE_CHANNEL_ACCESS_TOKEN` — ใช้ส่งเมนูและข้อความตอบกลับ
+- `LINE_ALLOWED_GROUP_ID` — จำกัดให้รับเฉพาะกลุ่ม “บัญชี 1”
+- `LINE_GROUP_NAME` — ชื่อกลุ่มที่แสดงบนเว็บ
+
 ## Deploy บน Render
 
 โปรเจกต์มี `render.yaml` สำหรับสร้าง Web Service:

@@ -56,28 +56,122 @@ function verifyLineSignature(raw, signature) {
     crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-function parseLineRequest(event) {
-  if (event.type !== 'message' || event.message?.type !== 'text') return null;
-  const text = event.message.text.trim();
-  const isRequest = /ขอ\s*(รหัส|password|pass)|password\s*request/i.test(text);
-  if (!isRequest) return null;
-  const clean = text
-    .replace(/ขอ\s*(รหัส|password|pass)\s*/i, '')
-    .replace(/password\s*request\s*/i, '')
-    .trim();
-  const [systemPart, ...reasonParts] = clean.split(/\n|เหตุผล\s*[:：]?/i);
+const requestSystems = [
+  'Google Workspace',
+  'Microsoft',
+  'Instagram',
+  'Facebook',
+  'TikTok',
+  'TikTok Ads',
+  'Adobe',
+  'CapCut',
+  'Apple ID',
+  'Gmail',
+  'CCTV',
+  'Network',
+];
+
+function isAllowedLineGroup(event) {
+  if (event.source?.type !== 'group') return false;
+  const allowedGroupId = process.env.LINE_ALLOWED_GROUP_ID;
+  return !allowedGroupId || event.source.groupId === allowedGroupId;
+}
+
+function lineRequestMenu() {
   return {
-    id: `line-${event.webhookEventId || event.message.id}`,
+    type: 'text',
+    text: 'เลือกบัญชีที่ต้องการขอ Password',
+    quickReply: {
+      items: requestSystems.map((system) => ({
+        type: 'action',
+        action: {
+          type: 'postback',
+          label: system.slice(0, 20),
+          data: new URLSearchParams({ action: 'request', system }).toString(),
+          displayText: `ขอ Password: ${system}`,
+        },
+      })),
+    },
+  };
+}
+
+async function replyLine(replyToken, messages) {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!accessToken || !replyToken) return false;
+  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ replyToken, messages }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`LINE reply failed: ${response.status} ${detail}`);
+  }
+  return true;
+}
+
+async function getLineMemberName(event) {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const groupId = event.source?.groupId;
+  const userId = event.source?.userId;
+  if (!accessToken || !groupId || !userId) return null;
+  try {
+    const response = await fetch(
+      `https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } },
+    );
+    if (!response.ok) return null;
+    const profile = await response.json();
+    return profile.displayName || null;
+  } catch {
+    return null;
+  }
+}
+
+function parseLineRequest(event) {
+  let systemPart = '';
+  let reason = '';
+  let sourceMessageId = event.webhookEventId;
+
+  if (event.type === 'postback') {
+    const data = new URLSearchParams(event.postback?.data || '');
+    if (data.get('action') !== 'request') return null;
+    systemPart = data.get('system') || 'ไม่ระบุระบบ';
+    reason = 'สมาชิกกดขอ Password จากเมนูในกลุ่ม LINE';
+  } else if (event.type === 'message' && event.message?.type === 'text') {
+    const text = event.message.text.trim();
+    const isRequest = /ขอ\s*(รหัส|password|pass)|password\s*request/i.test(text);
+    if (!isRequest) return null;
+    const clean = text
+      .replace(/ขอ\s*(รหัส|password|pass)\s*/i, '')
+      .replace(/password\s*request\s*/i, '')
+      .trim();
+    if (!clean) return null;
+    const [system, ...reasonParts] = clean.split(/\n|เหตุผล\s*[:：]?/i);
+    systemPart = system;
+    reason = reasonParts.join(' ').trim() || text;
+    sourceMessageId = event.message.id;
+  } else {
+    return null;
+  }
+
+  return {
+    id: `line-${event.webhookEventId || sourceMessageId}`,
     name: `LINE User ${String(event.source?.userId || '').slice(-6)}`,
     email: event.source?.userId || 'LINE',
     system: systemPart || 'ไม่ระบุระบบ',
-    reason: reasonParts.join(' ').trim() || text,
+    reason,
     date: new Date(event.timestamp || Date.now()).toISOString().slice(0, 10),
     receivedAt: new Date(event.timestamp || Date.now()).toISOString(),
     status: 'pending',
-    urgent: /ด่วน|urgent/i.test(text),
+    urgent: false,
     source: 'LINE',
     lineUserId: event.source?.userId || null,
+    lineGroupId: event.source?.groupId || null,
+    lineGroupName: process.env.LINE_GROUP_NAME || 'บัญชี 1',
   };
 }
 
@@ -89,10 +183,32 @@ async function handleLineWebhook(req, res) {
   const payload = JSON.parse(raw || '{}');
   const current = readRequests();
   const known = new Set(current.map((item) => item.id));
-  const incoming = (payload.events || []).map(parseLineRequest).filter(Boolean);
-  for (const item of incoming) {
-    if (!known.has(item.id)) current.unshift(item);
+  const incoming = [];
+
+  for (const event of payload.events || []) {
+    if (!isAllowedLineGroup(event)) continue;
+    const text = event.message?.type === 'text' ? event.message.text.trim() : '';
+    const shouldShowMenu =
+      event.type === 'join' ||
+      /^(เมนู|ขอรหัส|ขอ password|password)$/i.test(text);
+
+    if (shouldShowMenu) {
+      await replyLine(event.replyToken, [lineRequestMenu()]);
+      continue;
+    }
+
+    const item = parseLineRequest(event);
+    if (!item || known.has(item.id)) continue;
+    item.name = await getLineMemberName(event) || item.name;
+    incoming.push(item);
+    known.add(item.id);
+    await replyLine(event.replyToken, [{
+      type: 'text',
+      text: `รับคำขอ ${item.system} แล้ว ✅\nผู้ดูแลจะตรวจสอบผ่านหน้าเว็บ`,
+    }]);
   }
+
+  current.unshift(...incoming.filter((item) => !current.some((saved) => saved.id === item.id)));
   if (incoming.length) writeRequests(current);
   send(res, 200, JSON.stringify({ ok: true, received: incoming.length }));
 }
@@ -115,7 +231,7 @@ async function handleLark(req, res) {
   send(res, 200, JSON.stringify({ ok: true }));
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'POST' && req.url === '/api/line/webhook') {
       return await handleLineWebhook(req, res);
@@ -130,6 +246,8 @@ http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({
         ok: true,
         lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET),
+        lineReplyConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
+        lineGroupRestricted: Boolean(process.env.LINE_ALLOWED_GROUP_ID),
         larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
       }));
     }
@@ -143,4 +261,7 @@ http.createServer(async (req, res) => {
   } catch (error) {
     send(res, 400, JSON.stringify({ ok: false, error: error.message }));
   }
-}).listen(port, () => console.log(`Passly: http://localhost:${port}`));
+});
+
+server.listen(port, () => console.log(`Passly: http://localhost:${port}`));
+module.exports = server;

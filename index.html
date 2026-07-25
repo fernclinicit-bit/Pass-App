@@ -121,11 +121,11 @@
         </section>
 
         <section class="manage-section" id="settings">
-          <div class="section-head"><div><h2>รับคำขอจาก LINE</h2><p>ผู้ใช้ส่ง “ขอรหัส ชื่อระบบ” มาที่ LINE OA แล้วเว็บจะแจ้งเตือนอัตโนมัติ</p></div><span class="channel-badge">LINE → WEB</span></div>
+          <div class="section-head"><div><h2>รับคำขอจากกลุ่ม LINE “บัญชี 1”</h2><p>สมาชิกกดเลือกระบบจาก Quick Reply แล้วเว็บจะแจ้งเตือนผู้ดูแลอัตโนมัติ</p></div><span class="channel-badge">LINE GROUP → WEB</span></div>
           <div class="line-settings">
             <label>Webhook endpoint<input id="lineEndpoint" readonly value="/api/line/webhook" /></label>
-            <div class="message-example"><strong>ตัวอย่างข้อความจากผู้ใช้</strong><code>ขอรหัส Google Workspace<br>เหตุผล: ใช้งานเอกสารของทีม Marketing</code></div>
-            <p class="security-note">ตั้งค่า <code>LINE_CHANNEL_SECRET</code> บน server เพื่อยืนยันลายเซ็น webhook ก่อนเปิดใช้งานจริง</p>
+            <div class="message-example"><strong>วิธีเปิดปุ่มในกลุ่ม</strong><code>พิมพ์ “เมนู” หรือ “ขอรหัส”<br>จากนั้นกดชื่อระบบที่ต้องการ</code></div>
+            <p class="security-note">ตั้งค่า <code>LINE_CHANNEL_SECRET</code>, <code>LINE_CHANNEL_ACCESS_TOKEN</code> และ <code>LINE_ALLOWED_GROUP_ID</code> บน server ก่อนเปิดใช้งานจริง</p>
           </div>
           <div class="section-head"><div><h2>ตั้งค่าการส่งเข้า Lark Chat</h2><p>Webhook จะใช้สำหรับส่ง password หลังผู้ดูแลอนุมัติเท่านั้น</p></div></div>
           <form class="settings-form" id="larkForm">
