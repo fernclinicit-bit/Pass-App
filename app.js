@@ -877,7 +877,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (form.elements.password.value !== form.elements.confirmPassword.value) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
-  if (passwordScore(form.elements.password.value) < 2) return toast("Master Password อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  // if (passwordScore(form.elements.password.value) < 2) return toast("Master Password อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
   const button = form.querySelector("button[type=submit]");
   button.disabled = true;
   button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
@@ -1096,7 +1096,7 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (form.elements.newPassword.value !== form.elements.confirmPassword.value) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
-  if (passwordScore(form.elements.newPassword.value) < 2) return toast("รหัสใหม่อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  // if (passwordScore(form.elements.newPassword.value) < 2) return toast("รหัสใหม่อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
   const button = form.querySelector("button");
   button.disabled = true;
   button.textContent = "กำลังเข้ารหัสใหม่…";
