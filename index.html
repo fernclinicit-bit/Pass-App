@@ -22,6 +22,7 @@
         <a class="nav-item active" data-view="overview" href="#overview"><span class="nav-icon">⌂</span> ภาพรวม</a>
         <a class="nav-item" data-view="requests" href="#codes"><span class="nav-icon">◇</span> คำขอทั้งหมด <span class="nav-count" id="navCount">0</span></a>
         <a class="nav-item" data-view="vault" href="#vault"><span class="nav-icon">▣</span> คลังบัญชี <span class="nav-count" id="vaultCount">20</span></a>
+        <a class="nav-item" data-view="bitwarden" href="#bitwarden"><span class="nav-icon">◈</span> Bitwarden</a>
         <a class="nav-item" data-view="settings" href="#settings"><span class="nav-icon">⚙</span> ตั้งค่าช่องทาง</a>
       </nav>
 
@@ -120,6 +121,77 @@
           <div class="system-grid" id="systemGrid"></div>
         </section>
 
+        <section class="manage-section bitwarden-section" id="bitwarden">
+          <div class="bw-hero">
+            <div class="bw-shield">◈</div>
+            <div>
+              <p class="eyebrow">Secure password delivery</p>
+              <h2>ศูนย์ใช้งาน Bitwarden</h2>
+              <p>เก็บรหัสใน Vault และใช้ Send แจกข้อมูลชั่วคราว โดยไม่คัดลอก Password ลง Passly</p>
+            </div>
+            <a class="primary-btn bw-open" href="https://vault.bitwarden.com/" target="_blank" rel="noopener noreferrer">เปิด Bitwarden Vault ↗</a>
+          </div>
+
+          <div class="bw-content">
+            <div class="bw-explainer">
+              <div>
+                <p class="eyebrow">How Bitwarden protects data</p>
+                <h3>Bitwarden ทำงานอย่างไร</h3>
+                <p>ข้อมูลใน Vault ถูกเข้ารหัสที่อุปกรณ์ก่อนซิงก์ขึ้นเซิร์ฟเวอร์ และจะถอดรหัสเมื่อเจ้าของปลดล็อกผ่านแอป Bitwarden เท่านั้น ผู้ดูแล Passly จึงไม่ต้องนำ Master Password หรือรหัสจริงมาเก็บในเว็บนี้</p>
+              </div>
+              <ol>
+                <li><span>1</span><div><strong>สร้างและเก็บใน Vault</strong><small>บันทึก Login หรือ Secure Note ในบัญชีส่วนตัวหรือ Organization</small></div></li>
+                <li><span>2</span><div><strong>เข้ารหัสก่อนซิงก์</strong><small>ข้อมูลที่ส่งไป Bitwarden Cloud หรือเซิร์ฟเวอร์องค์กรอยู่ในรูปเข้ารหัส</small></div></li>
+                <li><span>3</span><div><strong>ปลดล็อกที่อุปกรณ์</strong><small>ผู้ใช้ถอดรหัสผ่าน Master Password, PIN หรือ Biometrics ตามนโยบาย</small></div></li>
+              </ol>
+            </div>
+
+            <h3>ช่องทางใช้งาน Bitwarden</h3>
+            <div class="bw-client-grid">
+              <article><strong>Web Vault</strong><small>ตั้งค่าบัญชี, Organization, Collections, สิทธิ์สมาชิก และ Send</small></article>
+              <article><strong>Browser Extension</strong><small>บันทึก สร้าง และกรอก Username/Password บนเว็บไซต์ประจำวัน</small></article>
+              <article><strong>Mobile App</strong><small>เปิด Vault และ Autofill ในแอปหรือเบราว์เซอร์บนโทรศัพท์</small></article>
+              <article><strong>Desktop App</strong><small>จัดการ Vault บน Windows/macOS/Linux และใช้ Biometrics เมื่อรองรับ</small></article>
+              <article><strong>CLI</strong><small>สำหรับทีม IT และงานอัตโนมัติ ไม่ใช้เป็นช่องทางแจก Password ให้พนักงานทั่วไป</small></article>
+            </div>
+
+            <h3>ขั้นตอนแจก Password ที่แนะนำ</h3>
+            <div class="workflow-grid">
+              <article><span>1</span><strong>อนุมัติคำขอ</strong><small>ตรวจผู้ขอ ระบบ และวัตถุประสงค์ใน Passly</small></article>
+              <article><span>2</span><strong>สร้าง Text Send</strong><small>เปิด Bitwarden → Send → New → Text</small></article>
+              <article><span>3</span><strong>จำกัดการเข้าถึง</strong><small>ซ่อนข้อความ ตั้งหมดอายุ ลบอัตโนมัติ และจำกัดจำนวนเปิด</small></article>
+              <article><span>4</span><strong>ส่งลิงก์และบันทึก</strong><small>วางลิงก์ Send ใน Passly แล้วบันทึกเฉพาะหลักฐานการส่ง</small></article>
+            </div>
+
+            <h3>เลือกรูปแบบให้เหมาะกับงาน</h3>
+            <div class="bw-mode-grid">
+              <article><span class="mode-tag personal">ส่วนตัว</span><h4>My Vault</h4><p>เก็บ Login, Secure Note, Card และ Identity ของเจ้าของบัญชี ไม่เหมาะกับการแชร์เป็นทีม</p></article>
+              <article><span class="mode-tag team">ทีม</span><h4>Organization + Collections</h4><p>สิทธิ์ใช้งานระยะยาว แบ่ง Collection ตามฝ่ายหรือระบบ และกำหนดสิทธิ์ดู/แก้ไขเป็นรายคนหรือกลุ่ม</p></article>
+              <article class="recommended"><span class="mode-tag send">แนะนำ</span><h4>Bitwarden Send — Text</h4><p>แจก Username/Password รายคำขอผ่านลิงก์เข้ารหัส ตั้งวันหมดอายุ จำนวนครั้งเปิด และการยืนยันผู้รับได้</p></article>
+              <article><span class="mode-tag file">ไฟล์</span><h4>Bitwarden Send — File</h4><p>ส่งเอกสารหรือไฟล์เข้ารหัส เหมาะกับข้อมูลแนบ และต้องใช้ Premium หรือ Organization แบบชำระเงิน</p></article>
+            </div>
+
+            <div class="bw-policy">
+              <div><h3>ค่ามาตรฐานของ Fern Clinic</h3><p>ใช้เป็น checklist ทุกครั้งก่อนคัดลอกลิงก์ Send</p></div>
+              <ul>
+                <li><span>✓</span> ใช้ Text Send และเปิด Hide text by default</li>
+                <li><span>✓</span> Expiration 1 ชั่วโมง · Deletion 1 วัน</li>
+                <li><span>✓</span> จำกัดการเปิด 1 ครั้ง เมื่อเป็นรหัสสำคัญ</li>
+                <li><span>✓</span> ใช้ Password protection หรือ Email verification</li>
+                <li><span>✓</span> ห้ามวาง Password จริงใน LINE, Lark, Sheets หรือ Passly</li>
+              </ul>
+            </div>
+
+            <div class="bw-doc-links">
+              <strong>คู่มือ Bitwarden ทางการ</strong>
+              <a href="https://bitwarden.com/help/getting-started-webvault/" target="_blank" rel="noopener noreferrer">เริ่มใช้ Web Vault ↗</a>
+              <a href="https://bitwarden.com/help/about-organizations/" target="_blank" rel="noopener noreferrer">Organization และการแชร์ ↗</a>
+              <a href="https://bitwarden.com/help/create-send/" target="_blank" rel="noopener noreferrer">วิธีสร้าง Send ↗</a>
+              <a href="https://bitwarden.com/help/about-send/" target="_blank" rel="noopener noreferrer">ความปลอดภัยของ Send ↗</a>
+            </div>
+          </div>
+        </section>
+
         <section class="manage-section" id="settings">
           <div class="section-head"><div><h2>รับคำขอจากกลุ่ม LINE “บัญชี 1”</h2><p>สมาชิกกดเลือกระบบจาก Quick Reply แล้วเว็บจะแจ้งเตือนผู้ดูแลอัตโนมัติ</p></div><span class="channel-badge">LINE GROUP → WEB</span></div>
           <div class="line-settings">
@@ -127,12 +199,12 @@
             <div class="message-example"><strong>วิธีเปิดปุ่มในกลุ่ม</strong><code>พิมพ์ “เมนู” หรือ “ขอรหัส”<br>จากนั้นกดชื่อระบบที่ต้องการ</code></div>
             <p class="security-note">ตั้งค่า <code>LINE_CHANNEL_SECRET</code>, <code>LINE_CHANNEL_ACCESS_TOKEN</code> และ <code>LINE_ALLOWED_GROUP_ID</code> บน server ก่อนเปิดใช้งานจริง</p>
           </div>
-          <div class="section-head"><div><h2>ตั้งค่าการส่งเข้า Lark Chat</h2><p>Webhook จะใช้สำหรับส่ง password หลังผู้ดูแลอนุมัติเท่านั้น</p></div></div>
+          <div class="section-head"><div><h2>ตั้งค่าการส่งเข้า Lark Chat</h2><p>Webhook ใช้ส่งลิงก์ Bitwarden Send หลังผู้ดูแลอนุมัติเท่านั้น</p></div></div>
           <form class="settings-form" id="larkForm">
-            <label>Lark Custom Bot Webhook<input id="larkWebhook" type="url" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/..." /></label>
+            <label>Lark Custom Bot Webhook (เว้นว่างได้หากตั้งบน Server แล้ว)<input id="larkWebhook" type="url" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/..." /></label>
             <label>คำขึ้นต้นข้อความ<input id="larkPrefix" value="[Passly] ข้อมูลการเข้าใช้งาน" /></label>
             <div class="settings-actions"><button class="primary-btn" type="submit">บันทึกการตั้งค่า</button><button class="secondary-btn" type="button" id="testLarkBtn">ส่งข้อความทดสอบ</button></div>
-            <p class="security-note">🔒 Password จะถูกส่งครั้งเดียวและไม่ถูกบันทึกลงในประวัติคำขอ</p>
+            <p class="security-note">🔒 ส่งเฉพาะลิงก์ Bitwarden Send ที่มีวันหมดอายุ ไม่ส่ง Password ตรงในข้อความ</p>
           </form>
         </section>
       </section>
@@ -141,7 +213,28 @@
 
   <div class="modal-backdrop" id="editModal" hidden><section class="modal" role="dialog"><button class="modal-close" id="closeEditModal">×</button><div class="modal-symbol">✎</div><p class="eyebrow">Edit request</p><h2>แก้ไขคำขอ</h2><form id="editForm"><input name="id" type="hidden" /><label>ชื่อผู้ร้องขอ<input name="name" required /></label><label>อีเมล / ช่องทางติดต่อ<input name="email" required /></label><label>บัญชี / ระบบ<select name="system" id="editSystemSelect"></select></label><label>เหตุผล<textarea name="reason" required rows="3"></textarea></label><label>สถานะ<select name="status"><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option></select></label><label class="check-row"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label><button class="primary-btn full" type="submit">บันทึกการแก้ไข</button></form></section></div>
 
-  <div class="modal-backdrop" id="sendModal" hidden><section class="modal" role="dialog"><button class="modal-close" id="closeSendModal">×</button><div class="modal-symbol">↗</div><p class="eyebrow">Lark delivery</p><h2>ส่ง Password เข้า Lark</h2><p class="modal-copy" id="sendSummary"></p><form id="sendForm"><input name="id" type="hidden" /><label>Username<input name="username" required autocomplete="off" /></label><label>Password<input name="password" type="password" required autocomplete="new-password" /></label><label class="check-row"><input name="showPassword" type="checkbox" /><span>แสดง password ขณะตรวจสอบ</span></label><button class="primary-btn full" type="submit">ส่งเข้า Lark Chat <span>→</span></button></form></section></div>
+  <div class="modal-backdrop" id="sendModal" hidden>
+    <section class="modal bw-send-modal" role="dialog" aria-modal="true" aria-labelledby="sendTitle">
+      <button class="modal-close" id="closeSendModal">×</button>
+      <div class="modal-symbol">◈</div>
+      <p class="eyebrow">Bitwarden Send</p>
+      <h2 id="sendTitle">แจก Password อย่างปลอดภัย</h2>
+      <p class="modal-copy" id="sendSummary"></p>
+      <a class="vault-launch" href="https://vault.bitwarden.com/" target="_blank" rel="noopener noreferrer">1. เปิด Vault และสร้าง Text Send ↗</a>
+      <form id="sendForm">
+        <input name="id" type="hidden" />
+        <label>2. วางลิงก์ Bitwarden Send<input name="sendUrl" type="url" required placeholder="https://send.bitwarden.com/#/..." autocomplete="off" /></label>
+        <div class="field-row">
+          <label>หมดอายุ<input name="expiresAt" type="datetime-local" required /></label>
+          <label>จำนวนครั้งที่เปิดได้<select name="maxAccess"><option value="1">1 ครั้ง</option><option value="2">2 ครั้ง</option><option value="5">5 ครั้ง</option></select></label>
+        </div>
+        <label>ช่องทางส่ง<select name="channel"><option value="copy">คัดลอกข้อความเพื่อส่งส่วนตัว</option><option value="lark">ส่งลิงก์เข้า Lark</option></select></label>
+        <label class="check-row"><input name="secured" type="checkbox" required /><span>ตั้ง Hide text, Expiration และ Password/Email verification ใน Bitwarden แล้ว</span></label>
+        <p class="security-note">Passly จะไม่บันทึก Password หรือลิงก์ Send เต็ม โดยเก็บเฉพาะเวลา ช่องทาง และวันหมดอายุเพื่อ Audit</p>
+        <button class="primary-btn full" type="submit">บันทึกและเตรียมส่ง <span>→</span></button>
+      </form>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="modal" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">

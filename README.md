@@ -54,6 +54,28 @@ https://YOUR-DOMAIN/api/line/webhook
 - `LINE_ALLOWED_GROUP_ID` — จำกัดให้รับเฉพาะกลุ่ม “บัญชี 1”
 - `LINE_GROUP_NAME` — ชื่อกลุ่มที่แสดงบนเว็บ
 
+## การแจก Password ด้วย Bitwarden Send
+
+Passly ไม่เก็บ Password จริงและไม่เชื่อมต่อ Bitwarden API โดยตรง ผู้ดูแลใช้ขั้นตอนนี้:
+
+1. ตรวจและอนุมัติคำขอใน Passly
+2. เปิด Bitwarden Web Vault แล้วสร้าง `Send > New > Text`
+3. เปิด `Hide text by default` ตั้ง Expiration, Deletion date, Maximum access count
+   และ Password protection หรือ Email verification ตามระดับความสำคัญ
+4. คัดลอกลิงก์ Send กลับมาที่ Passly แล้วเลือกคัดลอกข้อความหรือส่งเข้า Lark
+5. Passly เก็บเฉพาะเวลา ช่องทาง วันหมดอายุ จำนวนครั้ง และค่าอ้างอิงแบบ hash
+   โดยไม่เก็บ Password หรือลิงก์ Send เต็ม
+
+สำหรับสิทธิ์ใช้งานระยะยาว ให้เก็บรายการใน Bitwarden Organization และแบ่ง
+Collections ตามฝ่ายหรือระบบ ส่วน Send ใช้สำหรับการแจกข้อมูลแบบชั่วคราวรายคำขอ
+
+คู่มือทางการ:
+
+- https://bitwarden.com/help/getting-started-webvault/
+- https://bitwarden.com/help/about-organizations/
+- https://bitwarden.com/help/create-send/
+- https://bitwarden.com/help/about-send/
+
 ## Deploy บน Render
 
 โปรเจกต์มี `render.yaml` สำหรับสร้าง Web Service:
