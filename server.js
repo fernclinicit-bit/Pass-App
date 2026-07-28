@@ -17,6 +17,12 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
   res.writeHead(code, {
     'Content-Type': type,
     'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
   });
   res.end(body);
 }
@@ -254,7 +260,8 @@ const server = http.createServer(async (req, res) => {
 
     const target = req.url === '/' ? '/index.html' : req.url.split('?')[0];
     const file = path.resolve(root, '.' + target);
-    if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    const relative = path.relative(root, file);
+    if (relative.startsWith('..') || path.isAbsolute(relative) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       return send(res, 404, 'Not found', 'text/plain; charset=utf-8');
     }
     send(res, 200, fs.readFileSync(file), types[path.extname(file)] || 'application/octet-stream');

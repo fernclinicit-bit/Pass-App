@@ -3,254 +3,301 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#f4f6f1" />
-  <title>Passly — ระบบคำขอ Password</title>
+  <meta name="theme-color" content="#f2f5f1" />
+  <meta name="description" content="Passly Password Vault และระบบบริหารคำขอรหัสผ่านสำหรับ Fern Clinic" />
+  <title>Passly Vault — Password Manager</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <a class="brand" href="#" aria-label="Passly home">
-        <span class="brand-mark"><i></i><i></i><i></i></span>
-        <span>passly</span>
-      </a>
-
-      <nav class="nav" aria-label="เมนูหลัก">
-        <a class="nav-item active" data-view="overview" href="#overview"><span class="nav-icon">⌂</span> ภาพรวม</a>
-        <a class="nav-item" data-view="requests" href="#codes"><span class="nav-icon">◇</span> คำขอทั้งหมด <span class="nav-count" id="navCount">0</span></a>
-        <a class="nav-item" data-view="vault" href="#vault"><span class="nav-icon">▣</span> คลังบัญชี <span class="nav-count" id="vaultCount">20</span></a>
-        <a class="nav-item" data-view="bitwarden" href="#bitwarden"><span class="nav-icon">◈</span> Bitwarden</a>
-        <a class="nav-item" data-view="settings" href="#settings"><span class="nav-icon">⚙</span> ตั้งค่าช่องทาง</a>
-      </nav>
-
-      <div class="sidebar-bottom">
-        <div class="usage-card">
-          <div class="usage-head"><span>พื้นที่ใช้งาน</span><strong id="usageText">0 / 100</strong></div>
-          <div class="progress"><i id="usageBar"></i></div>
-          <small>แพ็กเกจเริ่มต้น</small>
+  <section class="lock-screen" id="lockScreen">
+    <div class="lock-orb orb-one"></div><div class="lock-orb orb-two"></div>
+    <div class="lock-layout">
+      <div class="lock-intro">
+        <a class="brand lock-brand" href="#"><span class="brand-mark"><i></i><i></i><i></i></span><span>passly</span></a>
+        <p class="eyebrow">Fern Clinic Password Manager</p>
+        <h1>รหัสทุกบัญชี<br><span>อยู่ในที่เดียว</span></h1>
+        <p>Vault เข้ารหัสบนอุปกรณ์ จัดหมวดหมู่ ตรวจรหัสซ้ำ และแจกข้อมูลผ่านลิงก์ Passly ที่ป้องกันด้วย PIN</p>
+        <div class="lock-features">
+          <span>✓ AES-GCM 256-bit</span><span>✓ Master Password</span><span>✓ Auto-lock</span>
         </div>
-        <button class="user-card" type="button">
-          <span class="avatar">FN</span>
-          <span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span>
-          <span class="dots">•••</span>
-        </button>
+      </div>
+      <div class="unlock-card">
+        <div id="setupPanel" hidden>
+          <span class="security-mark">⌁</span>
+          <p class="eyebrow">Create encrypted vault</p>
+          <h2>สร้าง Passly Vault</h2>
+          <p class="panel-copy">ตั้ง Master Password สำหรับเข้ารหัสข้อมูลบนเบราว์เซอร์นี้ Passly จะไม่บันทึกรหัสนี้</p>
+          <form id="setupForm">
+            <label>Master Password<input name="password" type="password" required minlength="12" autocomplete="new-password" placeholder="อย่างน้อย 12 ตัวอักษร" /></label>
+            <label>ยืนยัน Master Password<input name="confirmPassword" type="password" required minlength="12" autocomplete="new-password" /></label>
+            <div class="master-meter"><i id="masterMeter"></i></div>
+            <label class="check-row"><input name="acknowledge" type="checkbox" required /><span>ฉันเข้าใจว่าหากลืม Master Password จะไม่สามารถถอดรหัส Vault ได้</span></label>
+            <button class="primary-btn full" type="submit">สร้าง Vault ที่เข้ารหัส <span>→</span></button>
+          </form>
+        </div>
+        <div id="unlockPanel" hidden>
+          <span class="security-mark">⌁</span>
+          <p class="eyebrow">Encrypted vault</p>
+          <h2>ปลดล็อก Passly</h2>
+          <p class="panel-copy">ข้อมูลยังคงเข้ารหัสจนกว่าจะกรอก Master Password ที่ถูกต้อง</p>
+          <form id="unlockForm">
+            <label>Master Password<input name="password" type="password" required autocomplete="current-password" autofocus /></label>
+            <p class="form-error" id="unlockError" hidden></p>
+            <button class="primary-btn full" type="submit">ปลดล็อก Vault <span>→</span></button>
+          </form>
+          <button class="text-btn danger-text" id="resetFromLock" type="button">ลบ Vault บนอุปกรณ์นี้</button>
+        </div>
+        <div class="encryption-foot"><span class="pulse-dot"></span> เข้ารหัสก่อนบันทึก · กุญแจอยู่ในหน่วยความจำเท่านั้น</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell" id="mainApp" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard"><span class="brand-mark"><i></i><i></i><i></i></span><span>passly</span></a>
+      <div class="workspace-switch"><span class="avatar">FN</span><div><strong>Fern Clinic</strong><small>Organization Vault</small></div><span>⌄</span></div>
+      <nav class="nav" aria-label="เมนูหลัก">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span> ภาพรวม</button>
+        <button class="nav-item" data-view="vault"><span class="nav-icon">▣</span> Vault <span class="nav-count" id="navVaultCount">0</span></button>
+        <button class="nav-item" data-view="requests"><span class="nav-icon">◇</span> คำขอ Password <span class="nav-count" id="navRequestCount">0</span></button>
+        <p class="nav-label">Security tools</p>
+        <button class="nav-item" data-view="generator"><span class="nav-icon">✦</span> ตัวสร้างรหัส</button>
+        <button class="nav-item" data-view="security"><span class="nav-icon">◉</span> รายงานความเสี่ยง <span class="risk-dot" id="navRiskDot"></span></button>
+        <p class="nav-label">Organization</p>
+        <button class="nav-item" data-view="collections"><span class="nav-icon">⊞</span> Collections</button>
+        <button class="nav-item" data-view="members"><span class="nav-icon">◎</span> สมาชิกและกลุ่ม</button>
+        <button class="nav-item" data-view="activity"><span class="nav-icon">↻</span> Activity Log</button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> ตั้งค่า</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="vault-state"><div><span class="pulse-dot"></span><strong>Vault ปลดล็อกอยู่</strong></div><small id="autoLockText">ล็อกอัตโนมัติใน 5 นาที</small></div>
+        <button class="lock-btn" id="lockVaultBtn" type="button"><span>⌁</span> ล็อก Vault</button>
+        <div class="user-card"><span class="avatar">FN</span><span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span></div>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <button class="mobile-menu" id="menuBtn" aria-label="เปิดเมนู">☰</button>
-        <div class="page-title"><span>Workspace</span><b>/</b><strong>ภาพรวม</strong></div>
+        <div class="page-title"><span>Passly</span><b>/</b><strong id="currentPageTitle">ภาพรวม</strong></div>
+        <label class="global-search"><span>⌕</span><input id="globalSearch" type="search" placeholder="ค้นหาใน Vault…" autocomplete="off" /><kbd>Ctrl K</kbd></label>
         <div class="top-actions">
           <button class="icon-btn" id="themeBtn" aria-label="เปลี่ยนธีม">☼</button>
-          <button class="primary-btn" id="openModal"><span>＋</span> เพิ่มคำขอ</button>
+          <button class="primary-btn" id="newItemBtn"><span>＋</span> รายการใหม่</button>
         </div>
       </header>
 
-      <section class="content">
+      <div class="content">
         <aside class="line-alert" id="lineAlert">
           <span class="line-logo">LINE</span>
-          <div><strong>กำลังตรวจสอบคำขอจาก LINE</strong><small id="lineStatus">เชื่อมต่อกับระบบแจ้งเตือนบนเว็บ</small></div>
-          <button id="enableNotifications">เปิดแจ้งเตือนเดสก์ท็อป</button>
+          <div><strong>ระบบคำขอจากกลุ่ม “บัญชี 1”</strong><small id="lineStatus">กำลังตรวจสอบการเชื่อมต่อ…</small></div>
+          <button id="enableNotifications">เปิดแจ้งเตือน</button>
         </aside>
-        <div class="hero-row" id="overview">
-          <div>
-            <p class="eyebrow">Password request center</p>
-            <h1>สวัสดี, Fern <span>✦</span></h1>
-            <p class="subtitle">รับคำขอ อนุมัติ และติดตามการแจก password อย่างเป็นระบบ</p>
-          </div>
-          <div class="date-pill" id="today"></div>
-        </div>
 
-        <section class="stats-grid" aria-label="สถิติรหัส">
-          <article class="stat-card accent">
-            <div class="stat-top"><span class="stat-icon">◇</span><span class="trend">คำขอทั้งหมด</span></div>
-            <div class="stat-value" id="totalStat">0</div>
-            <p><b id="newStat">0 รายการใหม่</b> ที่รอดำเนินการ</p>
-            <div class="spark-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          </article>
-          <article class="stat-card">
-            <div class="stat-top"><span class="stat-icon green">✓</span><span class="trend positive">อนุมัติแล้ว</span></div>
-            <div class="stat-value" id="activeStat">0</div>
-            <p>คำขอที่อนุมัติให้เข้าถึง</p>
-            <div class="mini-line green-line"></div>
-          </article>
-          <article class="stat-card">
-            <div class="stat-top"><span class="stat-icon purple">↗</span><span class="trend">แจกสำเร็จ</span></div>
-            <div class="stat-value" id="sentStat">0</div>
-            <p>ผู้รับยืนยันว่าได้รับแล้ว</p>
-            <div class="mini-line purple-line"></div>
-          </article>
-          <article class="stat-card">
-            <div class="stat-top"><span class="stat-icon orange">◷</span><span class="trend warning">รออนุมัติ</span></div>
-            <div class="stat-value" id="expiringStat">0</div>
-            <p>คำขอที่ต้องตรวจสอบ</p>
-            <div class="mini-line orange-line"></div>
-          </article>
+        <section class="view" id="view-dashboard">
+          <div class="hero-row">
+            <div><p class="eyebrow">Password security workspace</p><h1>สวัสดี, Fern <span>✦</span></h1><p class="subtitle">Vault ถูกปลดล็อกและพร้อมจัดการข้อมูลเข้าใช้งาน</p></div>
+            <div class="date-pill" id="today"></div>
+          </div>
+          <section class="stats-grid">
+            <article class="stat-card accent"><div class="stat-top"><span class="stat-icon">▣</span><span class="trend">Vault items</span></div><div class="stat-value" id="dashboardItemCount">0</div><p><b id="dashboardLoginCount">0 logins</b> ที่จัดเก็บแบบเข้ารหัส</p><div class="spark-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon green">✓</span><span class="trend positive">สุขภาพ Vault</span></div><div class="stat-value"><span id="dashboardHealthScore">100</span><small>/100</small></div><p>คะแนนความแข็งแรงของรหัส</p><div class="mini-line green-line"></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon orange">!</span><span class="trend warning">ต้องตรวจสอบ</span></div><div class="stat-value" id="dashboardRiskCount">0</div><p>รหัสอ่อน ซ้ำ หรือเก่า</p><div class="mini-line orange-line"></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon purple">◇</span><span class="trend">คำขอใหม่</span></div><div class="stat-value" id="dashboardPendingCount">0</div><p>รายการที่รอผู้ดูแลอนุมัติ</p><div class="mini-line purple-line"></div></article>
+          </section>
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head"><div><h2>รายการที่ใช้งานล่าสุด</h2><p>ข้อมูลจะถูกซ่อนจนกว่าจะกดเปิด</p></div><button class="text-btn" data-go-view="vault">ดู Vault ทั้งหมด →</button></div>
+              <div class="recent-list" id="recentVaultItems"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>Security Center</h2><p>สรุปสิ่งที่ควรแก้ไขก่อน</p></div><button class="text-btn" data-go-view="security">เปิดรายงาน →</button></div>
+              <div class="security-summary" id="securitySummary"></div>
+            </section>
+          </div>
+          <section class="panel request-preview-panel">
+            <div class="panel-head"><div><h2>คำขอล่าสุดจากทีม</h2><p>อนุมัติแล้วเลือกข้อมูลจาก Vault เพื่อสร้างลิงก์ Passly Share</p></div><button class="text-btn" data-go-view="requests">จัดการคำขอ →</button></div>
+            <div class="request-preview" id="requestPreview"></div>
+          </section>
         </section>
 
-        <section class="codes-section" id="codes">
-          <div class="section-head">
-            <div><h2>คำขอ Password ล่าสุด</h2><p>อนุมัติหรือปฏิเสธก่อนส่งข้อมูลให้ผู้ร้องขอ</p></div>
-            <div class="table-actions">
-              <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="ค้นหาผู้ขอหรือระบบ" /></label>
-              <select id="statusFilter" aria-label="กรองสถานะ">
-                <option value="all">ทุกสถานะ</option>
-                <option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option>
-              </select>
-            </div>
+        <section class="view" id="view-vault" hidden>
+          <div class="view-header">
+            <div><p class="eyebrow">Encrypted items</p><h1>Passly Vault</h1><p>Login, Secure Note, Card และ Identity รวมอยู่ในพื้นที่เข้ารหัสเดียวกัน</p></div>
+            <div class="view-actions"><button class="secondary-btn" id="importQuickBtn">นำเข้า Excel</button><button class="primary-btn" data-open-item><span>＋</span> เพิ่มรายการ</button></div>
           </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>ผู้ร้องขอ</th><th>บัญชี / ระบบ</th><th>วัตถุประสงค์</th><th>วันที่ขอ</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
-              <tbody id="codesBody"></tbody>
-            </table>
-            <div class="empty-state" id="emptyState" hidden>
-              <div>◇</div><h3>ยังไม่พบคำขอ</h3><p>ลองเปลี่ยนคำค้นหา หรือเพิ่มคำขอใหม่</p>
+          <div class="vault-toolbar">
+            <div class="filter-chips" id="vaultFilters">
+              <button class="active" data-vault-filter="all">ทั้งหมด <span id="filterAllCount">0</span></button>
+              <button data-vault-filter="favorite">★ Favorites</button>
+              <button data-vault-filter="login">Logins</button>
+              <button data-vault-filter="note">Secure Notes</button>
+              <button data-vault-filter="card">Cards</button>
+              <button data-vault-filter="identity">Identities</button>
+              <button data-vault-filter="trash">Trash</button>
             </div>
+            <div class="vault-controls"><select id="folderFilter"><option value="all">ทุก Folder</option></select><select id="collectionFilter"><option value="all">ทุก Collection</option></select><select id="vaultSort"><option value="updated">อัปเดตล่าสุด</option><option value="name">ชื่อ A–Z</option><option value="strength">ความเสี่ยงสูงก่อน</option></select></div>
           </div>
-          <div class="table-footer"><span id="resultCount">แสดง 0 รายการ</span><button id="showAllBtn">ดูทั้งหมด →</button></div>
+          <div class="vault-list-head"><span>รายการ</span><span>เจ้าของ / หมวด</span><span>สถานะ</span><span>อัปเดต</span><span></span></div>
+          <div class="vault-list" id="vaultList"></div>
+          <div class="empty-state" id="vaultEmpty" hidden><div>▣</div><h3>ยังไม่มีรายการในมุมมองนี้</h3><p>เพิ่ม Login ใหม่ หรือนำเข้าจากไฟล์ Excel เดิม</p><button class="primary-btn" data-open-item>เพิ่มรายการแรก</button></div>
         </section>
 
-        <section class="manage-section" id="vault">
-          <div class="section-head"><div><h2>คลังบัญชีและระบบ</h2><p>เพิ่ม แก้ไข หรือลบชื่อระบบที่ผู้ใช้สามารถร้องขอได้</p></div><button class="primary-btn" id="addSystemBtn"><span>＋</span> เพิ่มระบบ</button></div>
-          <div class="system-grid" id="systemGrid"></div>
+        <section class="view" id="view-requests" hidden>
+          <div class="view-header">
+            <div><p class="eyebrow">Access workflow</p><h1>คำขอ Password</h1><p>รับคำขอจาก LINE ตรวจสอบเหตุผล และแจกข้อมูลจาก Vault โดยตรง</p></div>
+            <button class="primary-btn" id="newRequestBtn"><span>＋</span> เพิ่มคำขอ</button>
+          </div>
+          <section class="panel">
+            <div class="panel-head request-toolbar">
+              <label class="search-box"><span>⌕</span><input id="requestSearch" type="search" placeholder="ค้นหาผู้ขอหรือระบบ" /></label>
+              <select id="requestStatusFilter"><option value="all">ทุกสถานะ</option><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option></select>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>ผู้ร้องขอ</th><th>ระบบ</th><th>วัตถุประสงค์</th><th>วันที่</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead><tbody id="requestTableBody"></tbody></table></div>
+            <div class="empty-state compact" id="requestEmpty" hidden><div>◇</div><h3>ไม่พบคำขอ</h3></div>
+          </section>
         </section>
 
-        <section class="manage-section bitwarden-section" id="bitwarden">
-          <div class="bw-hero">
-            <div class="bw-shield">◈</div>
-            <div>
-              <p class="eyebrow">Secure password delivery</p>
-              <h2>ศูนย์ใช้งาน Bitwarden</h2>
-              <p>เก็บรหัสใน Vault และใช้ Send แจกข้อมูลชั่วคราว โดยไม่คัดลอก Password ลง Passly</p>
-            </div>
-            <a class="primary-btn bw-open" href="https://vault.bitwarden.com/" target="_blank" rel="noopener noreferrer">เปิด Bitwarden Vault ↗</a>
-          </div>
-
-          <div class="bw-content">
-            <div class="bw-explainer">
-              <div>
-                <p class="eyebrow">How Bitwarden protects data</p>
-                <h3>Bitwarden ทำงานอย่างไร</h3>
-                <p>ข้อมูลใน Vault ถูกเข้ารหัสที่อุปกรณ์ก่อนซิงก์ขึ้นเซิร์ฟเวอร์ และจะถอดรหัสเมื่อเจ้าของปลดล็อกผ่านแอป Bitwarden เท่านั้น ผู้ดูแล Passly จึงไม่ต้องนำ Master Password หรือรหัสจริงมาเก็บในเว็บนี้</p>
+        <section class="view" id="view-generator" hidden>
+          <div class="view-header"><div><p class="eyebrow">Secure generator</p><h1>ตัวสร้างรหัส</h1><p>สร้าง Password หรือ Passphrase ด้วยตัวสุ่มที่ปลอดภัยจากเบราว์เซอร์</p></div></div>
+          <div class="generator-layout">
+            <section class="generator-card">
+              <div class="generator-tabs"><button class="active" data-generator-type="password">Password</button><button data-generator-type="passphrase">Passphrase</button></div>
+              <div class="generated-output"><strong id="generatedValue"></strong><button id="copyGenerated" title="คัดลอก">⧉</button><button id="regenerate" title="สร้างใหม่">↻</button></div>
+              <div class="strength-row"><span id="generatorStrengthLabel">แข็งแรงมาก</span><div class="strength-track"><i id="generatorStrengthBar"></i></div></div>
+              <div id="passwordOptions">
+                <label class="range-label"><span>ความยาว</span><strong id="lengthValue">18</strong></label><input id="passwordLength" type="range" min="8" max="64" value="18" />
+                <div class="option-grid"><label><input id="genUpper" type="checkbox" checked /> A–Z</label><label><input id="genLower" type="checkbox" checked /> a–z</label><label><input id="genNumbers" type="checkbox" checked /> 0–9</label><label><input id="genSymbols" type="checkbox" checked /> !@#$</label></div>
+                <label class="switch-row"><span><strong>หลีกเลี่ยงตัวที่คล้ายกัน</strong><small>เช่น 1, l, 0, O</small></span><input id="genAmbiguous" type="checkbox" checked /></label>
               </div>
-              <ol>
-                <li><span>1</span><div><strong>สร้างและเก็บใน Vault</strong><small>บันทึก Login หรือ Secure Note ในบัญชีส่วนตัวหรือ Organization</small></div></li>
-                <li><span>2</span><div><strong>เข้ารหัสก่อนซิงก์</strong><small>ข้อมูลที่ส่งไป Bitwarden Cloud หรือเซิร์ฟเวอร์องค์กรอยู่ในรูปเข้ารหัส</small></div></li>
-                <li><span>3</span><div><strong>ปลดล็อกที่อุปกรณ์</strong><small>ผู้ใช้ถอดรหัสผ่าน Master Password, PIN หรือ Biometrics ตามนโยบาย</small></div></li>
-              </ol>
-            </div>
-
-            <h3>ช่องทางใช้งาน Bitwarden</h3>
-            <div class="bw-client-grid">
-              <article><strong>Web Vault</strong><small>ตั้งค่าบัญชี, Organization, Collections, สิทธิ์สมาชิก และ Send</small></article>
-              <article><strong>Browser Extension</strong><small>บันทึก สร้าง และกรอก Username/Password บนเว็บไซต์ประจำวัน</small></article>
-              <article><strong>Mobile App</strong><small>เปิด Vault และ Autofill ในแอปหรือเบราว์เซอร์บนโทรศัพท์</small></article>
-              <article><strong>Desktop App</strong><small>จัดการ Vault บน Windows/macOS/Linux และใช้ Biometrics เมื่อรองรับ</small></article>
-              <article><strong>CLI</strong><small>สำหรับทีม IT และงานอัตโนมัติ ไม่ใช้เป็นช่องทางแจก Password ให้พนักงานทั่วไป</small></article>
-            </div>
-
-            <h3>ขั้นตอนแจก Password ที่แนะนำ</h3>
-            <div class="workflow-grid">
-              <article><span>1</span><strong>อนุมัติคำขอ</strong><small>ตรวจผู้ขอ ระบบ และวัตถุประสงค์ใน Passly</small></article>
-              <article><span>2</span><strong>สร้าง Text Send</strong><small>เปิด Bitwarden → Send → New → Text</small></article>
-              <article><span>3</span><strong>จำกัดการเข้าถึง</strong><small>ซ่อนข้อความ ตั้งหมดอายุ ลบอัตโนมัติ และจำกัดจำนวนเปิด</small></article>
-              <article><span>4</span><strong>ส่งลิงก์และบันทึก</strong><small>วางลิงก์ Send ใน Passly แล้วบันทึกเฉพาะหลักฐานการส่ง</small></article>
-            </div>
-
-            <h3>เลือกรูปแบบให้เหมาะกับงาน</h3>
-            <div class="bw-mode-grid">
-              <article><span class="mode-tag personal">ส่วนตัว</span><h4>My Vault</h4><p>เก็บ Login, Secure Note, Card และ Identity ของเจ้าของบัญชี ไม่เหมาะกับการแชร์เป็นทีม</p></article>
-              <article><span class="mode-tag team">ทีม</span><h4>Organization + Collections</h4><p>สิทธิ์ใช้งานระยะยาว แบ่ง Collection ตามฝ่ายหรือระบบ และกำหนดสิทธิ์ดู/แก้ไขเป็นรายคนหรือกลุ่ม</p></article>
-              <article class="recommended"><span class="mode-tag send">แนะนำ</span><h4>Bitwarden Send — Text</h4><p>แจก Username/Password รายคำขอผ่านลิงก์เข้ารหัส ตั้งวันหมดอายุ จำนวนครั้งเปิด และการยืนยันผู้รับได้</p></article>
-              <article><span class="mode-tag file">ไฟล์</span><h4>Bitwarden Send — File</h4><p>ส่งเอกสารหรือไฟล์เข้ารหัส เหมาะกับข้อมูลแนบ และต้องใช้ Premium หรือ Organization แบบชำระเงิน</p></article>
-            </div>
-
-            <div class="bw-policy">
-              <div><h3>ค่ามาตรฐานของ Fern Clinic</h3><p>ใช้เป็น checklist ทุกครั้งก่อนคัดลอกลิงก์ Send</p></div>
-              <ul>
-                <li><span>✓</span> ใช้ Text Send และเปิด Hide text by default</li>
-                <li><span>✓</span> Expiration 1 ชั่วโมง · Deletion 1 วัน</li>
-                <li><span>✓</span> จำกัดการเปิด 1 ครั้ง เมื่อเป็นรหัสสำคัญ</li>
-                <li><span>✓</span> ใช้ Password protection หรือ Email verification</li>
-                <li><span>✓</span> ห้ามวาง Password จริงใน LINE, Lark, Sheets หรือ Passly</li>
-              </ul>
-            </div>
-
-            <div class="bw-doc-links">
-              <strong>คู่มือ Bitwarden ทางการ</strong>
-              <a href="https://bitwarden.com/help/getting-started-webvault/" target="_blank" rel="noopener noreferrer">เริ่มใช้ Web Vault ↗</a>
-              <a href="https://bitwarden.com/help/about-organizations/" target="_blank" rel="noopener noreferrer">Organization และการแชร์ ↗</a>
-              <a href="https://bitwarden.com/help/create-send/" target="_blank" rel="noopener noreferrer">วิธีสร้าง Send ↗</a>
-              <a href="https://bitwarden.com/help/about-send/" target="_blank" rel="noopener noreferrer">ความปลอดภัยของ Send ↗</a>
-            </div>
+              <div id="passphraseOptions" hidden>
+                <label class="range-label"><span>จำนวนคำ</span><strong id="wordCountValue">5</strong></label><input id="wordCount" type="range" min="3" max="8" value="5" />
+                <label>ตัวคั่นคำ<input id="wordSeparator" value="-" maxlength="3" /></label>
+                <div class="option-grid"><label><input id="wordCapitalize" type="checkbox" /> ตัวพิมพ์ใหญ่</label><label><input id="wordNumber" type="checkbox" checked /> เพิ่มตัวเลข</label></div>
+              </div>
+              <div class="generator-actions"><button class="secondary-btn" id="saveGenerated">บันทึกเป็น Login</button><button class="primary-btn" id="copyGeneratedPrimary">คัดลอกรหัส</button></div>
+            </section>
+            <section class="panel generator-history-panel"><div class="panel-head"><div><h2>ประวัติที่สร้าง</h2><p>เข้ารหัสรวมกับ Vault และล้างได้ทุกเมื่อ</p></div><button class="text-btn danger-text" id="clearGeneratorHistory">ล้างประวัติ</button></div><div class="generator-history" id="generatorHistory"></div></section>
           </div>
         </section>
 
-        <section class="manage-section" id="settings">
-          <div class="section-head"><div><h2>รับคำขอจากกลุ่ม LINE “บัญชี 1”</h2><p>สมาชิกกดเลือกระบบจาก Quick Reply แล้วเว็บจะแจ้งเตือนผู้ดูแลอัตโนมัติ</p></div><span class="channel-badge">LINE GROUP → WEB</span></div>
-          <div class="line-settings">
-            <label>Webhook endpoint<input id="lineEndpoint" readonly value="/api/line/webhook" /></label>
-            <div class="message-example"><strong>วิธีเปิดปุ่มในกลุ่ม</strong><code>พิมพ์ “เมนู” หรือ “ขอรหัส”<br>จากนั้นกดชื่อระบบที่ต้องการ</code></div>
-            <p class="security-note">ตั้งค่า <code>LINE_CHANNEL_SECRET</code>, <code>LINE_CHANNEL_ACCESS_TOKEN</code> และ <code>LINE_ALLOWED_GROUP_ID</code> บน server ก่อนเปิดใช้งานจริง</p>
+        <section class="view" id="view-security" hidden>
+          <div class="view-header"><div><p class="eyebrow">Vault health</p><h1>รายงานความเสี่ยง</h1><p>ตรวจรหัสอ่อน รหัสซ้ำ รหัสเก่า และข้อมูลที่ควรเพิ่มเติมภายในอุปกรณ์</p></div><button class="secondary-btn" id="refreshSecurity">สแกนอีกครั้ง</button></div>
+          <div class="health-hero">
+            <div class="health-score"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50"></circle><circle id="healthRing" cx="60" cy="60" r="50"></circle></svg><div><strong id="healthScore">100</strong><span>/100</span></div></div>
+            <div><span class="health-label" id="healthLabel">ยอดเยี่ยม</span><h2>สุขภาพ Password Vault</h2><p id="healthDescription">ยังไม่พบรายการที่ต้องแก้ไข</p></div>
           </div>
-          <div class="section-head"><div><h2>ตั้งค่าการส่งเข้า Lark Chat</h2><p>Webhook ใช้ส่งลิงก์ Bitwarden Send หลังผู้ดูแลอนุมัติเท่านั้น</p></div></div>
-          <form class="settings-form" id="larkForm">
-            <label>Lark Custom Bot Webhook (เว้นว่างได้หากตั้งบน Server แล้ว)<input id="larkWebhook" type="url" placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/..." /></label>
-            <label>คำขึ้นต้นข้อความ<input id="larkPrefix" value="[Passly] ข้อมูลการเข้าใช้งาน" /></label>
-            <div class="settings-actions"><button class="primary-btn" type="submit">บันทึกการตั้งค่า</button><button class="secondary-btn" type="button" id="testLarkBtn">ส่งข้อความทดสอบ</button></div>
-            <p class="security-note">🔒 ส่งเฉพาะลิงก์ Bitwarden Send ที่มีวันหมดอายุ ไม่ส่ง Password ตรงในข้อความ</p>
-          </form>
+          <div class="risk-grid" id="riskCards"></div>
+          <section class="panel"><div class="panel-head"><div><h2>รายการที่แนะนำให้แก้ไข</h2><p>เรียงตามความเสี่ยงสูงสุด</p></div></div><div class="security-findings" id="securityFindings"></div></section>
         </section>
-      </section>
+
+        <section class="view" id="view-collections" hidden>
+          <div class="view-header"><div><p class="eyebrow">Organization structure</p><h1>Collections</h1><p>จัดกลุ่มข้อมูลตามฝ่าย ระบบ หรือความรับผิดชอบ และกำหนดผู้ที่เกี่ยวข้อง</p></div><button class="primary-btn" id="newCollectionBtn"><span>＋</span> Collection ใหม่</button></div>
+          <div class="collection-grid" id="collectionGrid"></div>
+          <section class="panel folder-panel"><div class="panel-head"><div><h2>Folders ส่วนตัว</h2><p>ใช้จัดหมวดใน Vault ของผู้ดูแล</p></div><button class="secondary-btn" id="newFolderBtn">เพิ่ม Folder</button></div><div class="folder-list" id="folderList"></div></section>
+        </section>
+
+        <section class="view" id="view-members" hidden>
+          <div class="view-header"><div><p class="eyebrow">Organization access</p><h1>สมาชิกและกลุ่ม</h1><p>บริหารรายชื่อ บทบาท สถานะ และ Collection ที่เกี่ยวข้องภายใน Passly Vault</p></div><div class="view-actions"><button class="secondary-btn" id="newGroupBtn">สร้างกลุ่ม</button><button class="primary-btn" id="newMemberBtn"><span>＋</span> เพิ่มสมาชิก</button></div></div>
+          <div class="member-stats"><article><span>สมาชิกทั้งหมด</span><strong id="memberCount">0</strong></article><article><span>ยืนยันแล้ว</span><strong id="confirmedMemberCount">0</strong></article><article><span>รอตอบรับ</span><strong id="invitedMemberCount">0</strong></article><article><span>กลุ่ม</span><strong id="groupCount">0</strong></article></div>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Organization Members</h2><p>บทบาทและสิทธิ์ต่อ Collection เป็นข้อมูลบริหารใน Vault เวอร์ชันนี้</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>สมาชิก</th><th>บทบาท</th><th>Collections</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead><tbody id="memberTableBody"></tbody></table></div>
+            <div class="empty-state compact" id="memberEmpty" hidden><div>◎</div><h3>ยังไม่มีสมาชิก</h3></div>
+          </section>
+          <div class="section-spacer"></div>
+          <div class="panel-head standalone-head"><div><h2>Groups</h2><p>รวมสมาชิกเพื่อกำหนดสิทธิ์ Collection ได้ง่ายขึ้น</p></div></div>
+          <div class="group-grid" id="groupGrid"></div>
+        </section>
+
+        <section class="view" id="view-activity" hidden>
+          <div class="view-header"><div><p class="eyebrow">Encrypted audit trail</p><h1>Activity Log</h1><p>ติดตามการเพิ่ม แก้ไข เปิดดู คัดลอก แจก และลบรายการ</p></div><button class="secondary-btn" id="exportActivityBtn">Export CSV</button></div>
+          <section class="panel"><div class="activity-list" id="activityList"></div></section>
+        </section>
+
+        <section class="view" id="view-settings" hidden>
+          <div class="view-header"><div><p class="eyebrow">Vault preferences</p><h1>ตั้งค่า Passly</h1><p>ความปลอดภัย การสำรองข้อมูล การนำเข้า และช่องทางแจ้งเตือน</p></div></div>
+          <div class="settings-grid">
+            <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>ความปลอดภัยของ Vault</h2><p>กำหนดเวลาล็อกอัตโนมัติและเปลี่ยน Master Password</p><label>ล็อกอัตโนมัติเมื่อไม่มีการใช้งาน<select id="lockTimeout"><option value="1">1 นาที</option><option value="5">5 นาที</option><option value="15">15 นาที</option><option value="30">30 นาที</option><option value="60">1 ชั่วโมง</option></select></label><button class="secondary-btn" id="changeMasterBtn">เปลี่ยน Master Password</button></div></section>
+            <section class="settings-card"><div class="settings-icon">⇅</div><div><h2>นำเข้าและสำรองข้อมูล</h2><p>รองรับ Excel โครงสร้างเดิม, CSV, JSON และไฟล์สำรองที่เข้ารหัส</p><div class="settings-actions"><button class="secondary-btn" id="importBtn">นำเข้า Excel / CSV</button><button class="secondary-btn" id="exportVaultBtn">Export Encrypted Backup</button><button class="text-btn" id="importBackupBtn">กู้คืน Backup</button></div></div></section>
+            <section class="settings-card"><div class="settings-icon">LINE</div><div><h2>LINE Request</h2><p id="lineConfigStatus">กำลังตรวจสอบการตั้งค่าบน Server…</p><code>/api/line/webhook</code></div></section>
+            <section class="settings-card"><div class="settings-icon">LARK</div><div><h2>Lark Chat</h2><p>ส่งเฉพาะลิงก์ Passly Share ส่วน PIN ให้ส่งผ่านอีกช่องทาง</p><label>Custom Bot Webhook<input id="larkWebhook" type="password" placeholder="เว้นว่างหากตั้งบน Server แล้ว" autocomplete="off" /></label><label>คำขึ้นต้นข้อความ<input id="larkPrefix" value="[Passly] ข้อมูลเข้าใช้งาน" /></label><button class="secondary-btn" id="saveLarkBtn">บันทึกใน Vault</button></div></section>
+            <section class="settings-card danger-card"><div class="settings-icon">!</div><div><h2>ลบ Vault บนอุปกรณ์นี้</h2><p>ลบข้อมูลเข้ารหัส การตั้งค่า และประวัติทั้งหมดอย่างถาวร</p><button class="danger-btn" id="resetVaultBtn">ลบ Passly Vault</button></div></section>
+          </div>
+          <div class="architecture-note"><strong>รูปแบบการเก็บข้อมูลในเวอร์ชันนี้</strong><p>Vault ถูกเข้ารหัสและเก็บเฉพาะในเบราว์เซอร์ของผู้ดูแลเครื่องนี้ จึงยังไม่ซิงก์รหัสข้ามอุปกรณ์และไม่ส่ง Master Password ไปยัง Server</p></div>
+        </section>
+      </div>
     </main>
   </div>
 
-  <div class="modal-backdrop" id="editModal" hidden><section class="modal" role="dialog"><button class="modal-close" id="closeEditModal">×</button><div class="modal-symbol">✎</div><p class="eyebrow">Edit request</p><h2>แก้ไขคำขอ</h2><form id="editForm"><input name="id" type="hidden" /><label>ชื่อผู้ร้องขอ<input name="name" required /></label><label>อีเมล / ช่องทางติดต่อ<input name="email" required /></label><label>บัญชี / ระบบ<select name="system" id="editSystemSelect"></select></label><label>เหตุผล<textarea name="reason" required rows="3"></textarea></label><label>สถานะ<select name="status"><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option></select></label><label class="check-row"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label><button class="primary-btn full" type="submit">บันทึกการแก้ไข</button></form></section></div>
+  <input id="credentialFileInput" type="file" accept=".xlsx,.csv,.json" hidden />
+  <input id="backupFileInput" type="file" accept=".json" hidden />
 
-  <div class="modal-backdrop" id="sendModal" hidden>
-    <section class="modal bw-send-modal" role="dialog" aria-modal="true" aria-labelledby="sendTitle">
-      <button class="modal-close" id="closeSendModal">×</button>
-      <div class="modal-symbol">◈</div>
-      <p class="eyebrow">Bitwarden Send</p>
-      <h2 id="sendTitle">แจก Password อย่างปลอดภัย</h2>
-      <p class="modal-copy" id="sendSummary"></p>
-      <a class="vault-launch" href="https://vault.bitwarden.com/" target="_blank" rel="noopener noreferrer">1. เปิด Vault และสร้าง Text Send ↗</a>
-      <form id="sendForm">
+  <div class="modal-backdrop" id="itemModal" hidden>
+    <section class="modal wide-modal" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle">
+      <button class="modal-close" data-close-modal="itemModal">×</button>
+      <p class="eyebrow">Encrypted vault item</p><h2 id="itemModalTitle">เพิ่มรายการใน Vault</h2>
+      <form id="itemForm">
         <input name="id" type="hidden" />
-        <label>2. วางลิงก์ Bitwarden Send<input name="sendUrl" type="url" required placeholder="https://send.bitwarden.com/#/..." autocomplete="off" /></label>
-        <div class="field-row">
-          <label>หมดอายุ<input name="expiresAt" type="datetime-local" required /></label>
-          <label>จำนวนครั้งที่เปิดได้<select name="maxAccess"><option value="1">1 ครั้ง</option><option value="2">2 ครั้ง</option><option value="5">5 ครั้ง</option></select></label>
+        <div class="type-picker">
+          <label><input type="radio" name="type" value="login" checked /><span>⌁<b>Login</b></span></label>
+          <label><input type="radio" name="type" value="note" /><span>▤<b>Secure Note</b></span></label>
+          <label><input type="radio" name="type" value="card" /><span>▰<b>Card</b></span></label>
+          <label><input type="radio" name="type" value="identity" /><span>◎<b>Identity</b></span></label>
         </div>
-        <label>ช่องทางส่ง<select name="channel"><option value="copy">คัดลอกข้อความเพื่อส่งส่วนตัว</option><option value="lark">ส่งลิงก์เข้า Lark</option></select></label>
-        <label class="check-row"><input name="secured" type="checkbox" required /><span>ตั้ง Hide text, Expiration และ Password/Email verification ใน Bitwarden แล้ว</span></label>
-        <p class="security-note">Passly จะไม่บันทึก Password หรือลิงก์ Send เต็ม โดยเก็บเฉพาะเวลา ช่องทาง และวันหมดอายุเพื่อ Audit</p>
-        <button class="primary-btn full" type="submit">บันทึกและเตรียมส่ง <span>→</span></button>
+        <label>ชื่อรายการ<input name="name" required placeholder="เช่น Google Workspace — Marketing" /></label>
+        <div data-item-fields="login">
+          <div class="field-row"><label>Username / Email<input name="username" autocomplete="off" /></label><label>Password<div class="input-with-actions"><input name="password" type="password" autocomplete="new-password" /><button type="button" id="toggleItemPassword">ดู</button><button type="button" id="generateItemPassword">สร้าง</button></div></label></div>
+          <label>เว็บไซต์ / URI<input name="uri" type="url" placeholder="https://accounts.example.com" /></label>
+          <div class="field-row"><label>วัตถุประสงค์<input name="purpose" /></label><label>อัปเดตรหัสล่าสุด<input name="passwordUpdatedAt" type="date" /></label></div>
+          <label>Password เดิม<input name="previousPassword" type="password" autocomplete="off" placeholder="ใช้เมื่อนำเข้าจาก Excel เท่านั้น" /></label>
+        </div>
+        <div data-item-fields="note" hidden><label>Secure Note<textarea name="secureNote" rows="7" placeholder="ข้อมูลสำคัญ หมายเลข License หรือ Recovery code"></textarea></label></div>
+        <div data-item-fields="card" hidden><div class="field-row"><label>ชื่อบนบัตร<input name="cardholder" /></label><label>ประเภทบัตร<input name="brand" placeholder="Visa / Mastercard" /></label></div><label>หมายเลขบัตร<input name="cardNumber" inputmode="numeric" autocomplete="off" /></label><div class="field-row"><label>วันหมดอายุ<input name="cardExpiry" placeholder="MM/YY" /></label><label>CVV<input name="cardCvv" type="password" inputmode="numeric" maxlength="4" /></label></div></div>
+        <div data-item-fields="identity" hidden><div class="field-row"><label>ชื่อ-นามสกุล<input name="fullName" /></label><label>อีเมล<input name="identityEmail" type="email" /></label></div><div class="field-row"><label>โทรศัพท์<input name="phone" /></label><label>เลขประจำตัว<input name="idNumber" /></label></div><label>ที่อยู่<textarea name="address" rows="3"></textarea></label></div>
+        <div class="field-row"><label>Folder<select name="folderId" id="itemFolderSelect"><option value="">ไม่มี Folder</option></select></label><label>Collection<select name="collectionId" id="itemCollectionSelect"><option value="">My Vault</option></select></label></div>
+        <div class="field-row"><label>Owner<input name="owner" placeholder="เช่น Marketing / IT" /></label><label class="check-row top-gap"><input name="favorite" type="checkbox" /><span>เพิ่มใน Favorites</span></label></div>
+        <label>หมายเหตุ<textarea name="notes" rows="3"></textarea></label>
+        <label class="check-row"><input name="reprompt" type="checkbox" /><span>ให้ยืนยัน Master Password ก่อนเปิดดูหรือคัดลอก</span></label>
+        <div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="itemModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึกแบบเข้ารหัส</button></div>
       </form>
     </section>
   </div>
 
-  <div class="modal-backdrop" id="modal" hidden>
-    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <button class="modal-close" id="closeModal" aria-label="ปิด">×</button>
-      <div class="modal-symbol">✦</div>
-      <p class="eyebrow">Password request</p><h2 id="modalTitle">บันทึกคำขอ Password</h2><p class="modal-copy">ระบุผู้ร้องขอ บัญชีที่ต้องการ และเหตุผลเพื่อส่งให้ผู้ดูแลอนุมัติ</p>
-      <form id="codeForm">
-        <div class="field-row">
-          <label>ชื่อผู้ร้องขอ<input name="name" required placeholder="เช่น สมชาย ใจดี" autocomplete="name" /></label><label>อีเมล / ช่องทางติดต่อ<input name="email" required placeholder="name@example.com" autocomplete="email" /></label>
-        </div>
-        <label>บัญชี / ระบบที่ต้องการ<select name="system" id="systemSelect" required></select></label><label>เหตุผลและวัตถุประสงค์<textarea name="reason" required rows="3" placeholder="อธิบายว่าจะนำไปใช้ทำอะไร"></textarea></label><label class="check-row"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label><button class="primary-btn full" type="submit">ส่งคำขอ <span>→</span></button>
-      </form>
-    </section>
+  <div class="modal-backdrop" id="itemDetailModal" hidden><section class="modal detail-modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="itemDetailModal">×</button><div id="itemDetailContent"></div></section></div>
+
+  <div class="modal-backdrop" id="requestModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="requestModal">×</button><p class="eyebrow">Password request</p><h2 id="requestModalTitle">เพิ่มคำขอ</h2><form id="requestForm"><input name="id" type="hidden" /><div class="field-row"><label>ชื่อผู้ร้องขอ<input name="name" required /></label><label>อีเมล / LINE ID<input name="email" required /></label></div><label>ระบบที่ต้องการ<input name="system" required list="vaultSystemList" /></label><datalist id="vaultSystemList"></datalist><label>วัตถุประสงค์<textarea name="reason" rows="3" required></textarea></label><div class="field-row"><label>สถานะ<select name="status"><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="delivered">แจกสำเร็จ</option><option value="rejected">ปฏิเสธ</option></select></label><label class="check-row top-gap"><input name="urgent" type="checkbox" /><span>คำขอเร่งด่วน</span></label></div><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="requestModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึกคำขอ</button></div></form></section>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p><strong id="toastTitle">สำเร็จ</strong><small id="toastMessage"></small></p></div>
-  <script src="app.js"></script>
+  <div class="modal-backdrop" id="deliverModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="deliverModal">×</button><p class="eyebrow">Passly Secure Share</p><h2>แจกข้อมูลจาก Vault</h2><p class="modal-copy" id="deliverSummary"></p><form id="deliverForm"><input name="requestId" type="hidden" /><label>รายการจาก Vault<select name="itemId" id="deliverItemSelect" required></select></label><div class="field-row"><label>ลิงก์หมดอายุ<select name="expiry"><option value="1">1 ชั่วโมง</option><option value="8">8 ชั่วโมง</option><option value="24">24 ชั่วโมง</option></select></label><label>ช่องทางส่ง<select name="channel"><option value="copy">คัดลอกข้อความ</option><option value="lark">ส่งลิงก์เข้า Lark</option></select></label></div><label>Share PIN<div class="input-with-actions"><input name="pin" readonly /><button type="button" id="regenerateSharePin">สร้างใหม่</button></div></label><p class="security-note">ลิงก์และ PIN ต้องส่งคนละช่องทาง Passly จะไม่เก็บ Password หรือลิงก์เต็มในประวัติ</p><button class="primary-btn full" type="submit">สร้างลิงก์ Passly Share <span>→</span></button></form></section>
+  </div>
+
+  <div class="modal-backdrop" id="shareResultModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="shareResultModal">×</button><span class="success-mark">✓</span><p class="eyebrow">Share ready</p><h2>ลิงก์พร้อมส่งแล้ว</h2><p class="modal-copy">ส่งลิงก์ให้ผู้รับ และแจ้ง PIN ผ่านอีกช่องทางหนึ่ง</p><label>ข้อความพร้อมลิงก์<textarea id="shareMessage" rows="5" readonly></textarea></label><button class="secondary-btn full" id="copyShareMessage">คัดลอกข้อความและลิงก์</button><div class="pin-result"><span>Share PIN</span><strong id="sharePinResult"></strong><button id="copySharePin">คัดลอก PIN</button></div><p class="security-note">PIN ไม่ได้รวมอยู่ในข้อความด้านบน</p></section>
+  </div>
+
+  <div class="modal-backdrop" id="collectionModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="collectionModal">×</button><p class="eyebrow">Organization collection</p><h2 id="collectionModalTitle">สร้าง Collection</h2><form id="collectionForm"><input name="id" type="hidden" /><label>ชื่อ Collection<input name="name" required placeholder="เช่น Marketing, Social Media, Network" /></label><label>คำอธิบาย<textarea name="description" rows="3"></textarea></label><label>สมาชิก / กลุ่มที่เกี่ยวข้อง<input name="members" placeholder="เช่น Marketing Team, IT Admin" /></label><label>สิทธิ์เริ่มต้น<select name="permission"><option value="view">ดูข้อมูล</option><option value="edit">ดูและแก้ไข</option><option value="manage">จัดการ Collection</option></select></label><label>สีประจำ Collection<input name="color" type="color" value="#5b73e8" /></label><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="collectionModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึก Collection</button></div></form></section>
+  </div>
+
+  <div class="modal-backdrop" id="memberModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="memberModal">×</button><p class="eyebrow">Organization member</p><h2 id="memberModalTitle">เพิ่มสมาชิก</h2><form id="memberForm"><input name="id" type="hidden" /><div class="field-row"><label>ชื่อ-นามสกุล<input name="name" required /></label><label>อีเมล<input name="email" type="email" required /></label></div><div class="field-row"><label>บทบาท<select name="role"><option value="owner">Owner</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="member">Member</option></select></label><label>สถานะ<select name="status"><option value="invited">Invited</option><option value="confirmed">Confirmed</option><option value="revoked">Revoked</option></select></label></div><fieldset class="collection-checks"><legend>Collections ที่เข้าถึงได้</legend><div id="memberCollectionChecks"></div></fieldset><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="memberModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึกสมาชิก</button></div></form></section>
+  </div>
+
+  <div class="modal-backdrop" id="groupModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="groupModal">×</button><p class="eyebrow">Organization group</p><h2 id="groupModalTitle">สร้างกลุ่ม</h2><form id="groupForm"><input name="id" type="hidden" /><label>ชื่อกลุ่ม<input name="name" required placeholder="เช่น Marketing Team" /></label><label>สมาชิกในกลุ่ม<input name="members" placeholder="ชื่อหรืออีเมล คั่นด้วยเครื่องหมายจุลภาค" /></label><label>Collection หลัก<select name="collectionId" id="groupCollectionSelect"><option value="">ยังไม่กำหนด</option></select></label><label>สิทธิ์<select name="permission"><option value="view">ดูข้อมูล</option><option value="edit">ดูและแก้ไข</option><option value="manage">จัดการ Collection</option></select></label><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="groupModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึกกลุ่ม</button></div></form></section>
+  </div>
+
+  <div class="modal-backdrop" id="changeMasterModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="changeMasterModal">×</button><p class="eyebrow">Re-encrypt vault</p><h2>เปลี่ยน Master Password</h2><form id="changeMasterForm"><label>Master Password ปัจจุบัน<input name="currentPassword" type="password" required /></label><label>Master Password ใหม่<input name="newPassword" type="password" required minlength="12" /></label><label>ยืนยันรหัสใหม่<input name="confirmPassword" type="password" required minlength="12" /></label><button class="primary-btn full" type="submit">เข้ารหัส Vault ใหม่</button></form></section>
+  </div>
+
+  <div class="toast" id="toast"><span>✓</span><div><strong id="toastTitle">บันทึกแล้ว</strong><small id="toastMessage"></small></div></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

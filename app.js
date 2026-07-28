@@ -1,65 +1,1506 @@
-const STORAGE_KEY='passly-password-requests-v2';
-let systems=JSON.parse(localStorage.getItem('passly-systems')||'null')||['Instagram','Microsoft','Adobe User','Meitu','TP-Link / Network','เครื่องพิมพ์ HP','NAS','CapCut','Facebook','Apple ID','Google / Workspace','CCTV / DMSS','Line Business','TikTok','TikTok Ads / Seller','Gmail','Z.com / Hosting','Bitwarden','Website WordPress','Motion'];
-const starterRequests=[
-{id:crypto.randomUUID(),name:'พิมพ์ชนก วัฒนา',email:'pimchanok@example.com',system:'Google / Workspace',reason:'ใช้งานเอกสารร่วมกันของทีม Marketing',date:'2026-07-17',status:'pending',urgent:true},
-{id:crypto.randomUUID(),name:'ณัฐวุฒิ พรชัย',email:'nattawut@example.com',system:'TikTok Ads / Seller',reason:'ตรวจสอบแคมเปญโฆษณาประจำเดือน',date:'2026-07-17',status:'approved',urgent:false},
-{id:crypto.randomUUID(),name:'ศิริพร แก้วใจ',email:'siriporn@example.com',system:'Adobe User',reason:'ออกแบบสื่อประชาสัมพันธ์คลินิก',date:'2026-07-16',status:'delivered',urgent:false},
-{id:crypto.randomUUID(),name:'ธนกฤต สมบูรณ์',email:'thanakrit@example.com',system:'CCTV / DMSS',reason:'ตรวจสอบเหตุการณ์ย้อนหลัง',date:'2026-07-15',status:'rejected',urgent:false},
-{id:crypto.randomUUID(),name:'กิตติภพ นาคินทร์',email:'kittipob@example.com',system:'Microsoft',reason:'เข้าใช้งาน Microsoft Office เครื่องใหม่',date:'2026-07-14',status:'delivered',urgent:false}];
-let requests=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')||starterRequests,showAll=false;
-const $=s=>document.querySelector(s),esc=v=>{const d=document.createElement('div');d.textContent=v;return d.innerHTML},initials=n=>n.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(),formatDate=v=>new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short',year:'2-digit'}).format(new Date(v+'T00:00:00')),save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(requests));
-const labels={pending:'รออนุมัติ',approved:'อนุมัติแล้ว',delivered:'แจกสำเร็จ',rejected:'ปฏิเสธ'};
-function toast(title,message){$('#toastTitle').textContent=title;$('#toastMessage').textContent=message;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),2600)}
-function render(){const term=$('#searchInput').value.trim().toLowerCase(),filter=$('#statusFilter').value,filtered=requests.filter(r=>(!term||`${r.name} ${r.email} ${r.system} ${r.reason}`.toLowerCase().includes(term))&&(filter==='all'||r.status===filter)),visible=showAll?filtered:filtered.slice(0,6);
-$('#codesBody').innerHTML=visible.map(r=>`<tr><td><div class="user-cell"><span class="user-avatar">${esc(initials(r.name))}</span><span><strong>${esc(r.name)} ${r.urgent?'<em class="urgent-dot">ด่วน</em>':''}</strong><small>${esc(r.email)}</small></span></div></td><td><strong>${esc(r.system)}</strong><small class="masked-pass">${r.deliveryMethod==='bitwarden-send'?'Bitwarden Send · ไม่เก็บรหัส':'Password ถูกซ่อน'}</small></td><td class="reason-cell">${esc(r.reason)}</td><td>${formatDate(r.date)}</td><td><span class="status ${r.status}">${labels[r.status]}</span></td><td><div class="row-actions">${r.status==='pending'?`<button class="approve-btn" data-action="approve" data-id="${r.id}">อนุมัติ</button><button class="reject-btn" data-action="reject" data-id="${r.id}">ปฏิเสธ</button>`:''}${r.status==='approved'?`<button class="deliver-btn" data-action="deliver" data-id="${r.id}">สร้าง Send</button>`:''}<button class="edit-btn" data-action="edit" data-id="${r.id}">แก้ไข</button><button class="more-btn" data-action="delete" data-id="${r.id}" title="ลบ">•••</button></div></td></tr>`).join('');
-$('#emptyState').hidden=filtered.length>0;$('table').hidden=filtered.length===0;$('#resultCount').textContent=`แสดง ${visible.length} จาก ${filtered.length} รายการ`;$('#showAllBtn').hidden=filtered.length<=6;$('#showAllBtn').textContent=showAll?'ย่อรายการ ↑':'ดูทั้งหมด →';$('#totalStat').textContent=requests.length;$('#activeStat').textContent=requests.filter(x=>x.status==='approved').length;$('#sentStat').textContent=requests.filter(x=>x.status==='delivered').length;$('#expiringStat').textContent=requests.filter(x=>x.status==='pending').length;$('#newStat').textContent=`${requests.filter(x=>x.status==='pending').length} รายการใหม่`;$('#navCount').textContent=requests.length;$('#usageText').textContent='63 / 100';$('#usageBar').style.width='63%'}
-function openModal(){$('#modal').hidden=false;document.body.style.overflow='hidden';setTimeout(()=>$('#codeForm [name=name]').focus(),50)}function closeModal(){$('#modal').hidden=true;document.body.style.overflow=''}
-function syncSystems(){const options='<option value="">เลือกบัญชีหรือระบบ</option>'+systems.map(x=>`<option>${esc(x)}</option>`).join('');$('#systemSelect').innerHTML=options;$('#editSystemSelect').innerHTML=options;$('#systemGrid').innerHTML=systems.map((x,i)=>`<article class="system-card"><span class="system-icon">${esc(x[0])}</span><div><strong>${esc(x)}</strong><small>พร้อมให้ร้องขอ</small></div><button data-system-edit="${i}">แก้ไข</button><button data-system-delete="${i}">×</button></article>`).join('');$('#vaultCount').textContent=systems.length;localStorage.setItem('passly-systems',JSON.stringify(systems))}
-syncSystems();$('#today').textContent=new Intl.DateTimeFormat('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());$('#openModal').onclick=openModal;$('#closeModal').onclick=closeModal;$('#modal').onclick=e=>{if(e.target===$('#modal'))closeModal()};$('#searchInput').oninput=render;$('#statusFilter').onchange=render;$('#showAllBtn').onclick=()=>{showAll=!showAll;render()};$('#themeBtn').onclick=()=>document.body.classList.toggle('dark');$('#menuBtn').onclick=()=>$('.sidebar').classList.toggle('open');
-$('#codeForm').onsubmit=e=>{e.preventDefault();const d=new FormData(e.currentTarget);requests.unshift({id:crypto.randomUUID(),name:d.get('name').trim(),email:d.get('email').trim(),system:d.get('system'),reason:d.get('reason').trim(),date:new Date().toISOString().slice(0,10),status:'pending',urgent:!!d.get('urgent')});save();render();closeModal();e.currentTarget.reset();toast('รับคำขอแล้ว','ส่งให้ผู้ดูแลตรวจสอบและอนุมัติ')};
-document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b){const r=requests.find(x=>x.id===b.dataset.id);if(!r)return;if(b.dataset.action==='approve'){r.status='approved';toast('อนุมัติคำขอแล้ว',`พร้อมสร้าง Bitwarden Send สำหรับ ${r.system}`)}if(b.dataset.action==='reject'){const reason=prompt('เหตุผลที่ปฏิเสธคำขอ:');if(reason===null)return;r.status='rejected';r.rejectReason=reason}if(b.dataset.action==='deliver'){const f=$('#sendForm');f.reset();f.elements.id.value=r.id;f.elements.expiresAt.value=new Date(Date.now()+3600000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);f.elements.maxAccess.value='1';f.elements.channel.value='copy';$('#sendSummary').textContent=`ผู้รับ: ${r.name} · ระบบ: ${r.system}`;$('#sendModal').hidden=false}if(b.dataset.action==='edit'){const f=$('#editForm');f.elements.id.value=r.id;f.name.value=r.name;f.email.value=r.email;f.system.value=r.system;f.reason.value=r.reason;f.status.value=r.status;f.urgent.checked=r.urgent;$('#editModal').hidden=false}if(b.dataset.action==='delete'&&confirm('ลบคำขอนี้ใช่หรือไม่?'))requests=requests.filter(x=>x.id!==r.id);save();render()}
-const se=e.target.closest('[data-system-edit]'),sd=e.target.closest('[data-system-delete]');if(se){const v=prompt('แก้ไขชื่อระบบ:',systems[+se.dataset.systemEdit]);if(v){systems[+se.dataset.systemEdit]=v.trim();syncSystems()}}if(sd&&confirm(`ลบ ${systems[+sd.dataset.systemDelete]} ออกจากรายการ?`)){systems.splice(+sd.dataset.systemDelete,1);syncSystems()}});
-document.querySelectorAll('.nav-item[data-view]').forEach(a=>a.onclick=()=>{document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));a.classList.add('active');$('.sidebar').classList.remove('open')});
-$('#addSystemBtn').onclick=()=>{const v=prompt('ชื่อบัญชีหรือระบบใหม่:');if(v){systems.push(v.trim());syncSystems()}};$('#closeEditModal').onclick=()=>$('#editModal').hidden=true;$('#closeSendModal').onclick=()=>$('#sendModal').hidden=true;
-$('#editForm').onsubmit=e=>{e.preventDefault();const f=e.currentTarget,r=requests.find(x=>x.id===f.elements.id.value);Object.assign(r,{name:f.name.value.trim(),email:f.email.value.trim(),system:f.system.value,reason:f.reason.value.trim(),status:f.status.value,urgent:f.urgent.checked});save();render();$('#editModal').hidden=true;toast('บันทึกแล้ว','อัปเดตข้อมูลคำขอเรียบร้อย')};
-const savedLark=JSON.parse(localStorage.getItem('passly-lark')||'{}');$('#larkWebhook').value=savedLark.webhook||'';$('#larkPrefix').value=savedLark.prefix||'[Passly] ข้อมูลการเข้าใช้งาน';$('#larkForm').onsubmit=e=>{e.preventDefault();localStorage.setItem('passly-lark',JSON.stringify({webhook:$('#larkWebhook').value.trim(),prefix:$('#larkPrefix').value.trim()}));toast('บันทึกแล้ว','ตั้งค่า Lark Chat เรียบร้อย')};
-async function sendLark(text){const webhook=$('#larkWebhook').value.trim();const res=await fetch('/api/lark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({webhook,text})});const out=await res.json();if(!res.ok||out.ok===false)throw new Error(out.error||'Lark ส่งข้อความไม่สำเร็จ');return out}
-$('#testLarkBtn').onclick=async()=>{try{await sendLark('Passly เชื่อมต่อสำเร็จ ✓');toast('ส่งสำเร็จ','ตรวจสอบข้อความใน Lark Chat')}catch(e){toast('ส่งไม่สำเร็จ',e.message)}};
-$('#sendForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,r=requests.find(x=>x.id===f.elements.id.value);try{const sendUrl=new URL(f.elements.sendUrl.value.trim());if(sendUrl.protocol!=='https:')throw new Error('ลิงก์ Bitwarden Send ต้องเป็น HTTPS');const expiresAt=f.elements.expiresAt.value,maxAccess=f.elements.maxAccess.value,channel=f.elements.channel.value,expiry=new Date(expiresAt);if(Number.isNaN(expiry.getTime())||expiry<=new Date())throw new Error('วันหมดอายุต้องอยู่ในอนาคต');const prefix=$('#larkPrefix').value.trim()||'[Passly] Bitwarden Send';const message=`${prefix}\nผู้รับ: ${r.name}\nระบบ: ${r.system}\nเปิดได้: ${maxAccess} ครั้ง\nหมดอายุ: ${expiry.toLocaleString('th-TH')}\nลิงก์: ${sendUrl.href}`;if(channel==='lark')await sendLark(message);else if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(message);else throw new Error('เบราว์เซอร์ไม่อนุญาตให้คัดลอก กรุณาเลือกส่งเข้า Lark');const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(sendUrl.href));r.status='delivered';r.deliveredAt=new Date().toISOString();r.deliveryMethod='bitwarden-send';r.deliveryAudit={channel,expiresAt,maxAccess,reference:Array.from(new Uint8Array(hash)).slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('')};save();render();f.reset();$('#sendModal').hidden=true;toast(channel==='lark'?'ส่งลิงก์เข้า Lark แล้ว':'คัดลอกข้อความแล้ว','Passly บันทึก Audit โดยไม่เก็บ Password หรือลิงก์เต็ม')}catch(err){toast('ดำเนินการไม่สำเร็จ',err.message)}};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#editModal').hidden=true;$('#sendModal').hidden=true}});save();render();
+import {
+  VAULT_STORAGE_KEY,
+  createSharePayload,
+  createVaultEnvelope,
+  encryptVault,
+  generatePassphrase,
+  generatePassword,
+  passwordScore,
+  sha256Reference,
+  unlockVaultEnvelope,
+} from "./vault-crypto.js";
+import { readCredentialFile } from "./xlsx-reader.js";
 
-let linePollReady=false;
-async function pullLineRequests(){
-  try{
-    const response=await fetch('/api/requests',{cache:'no-store'});
-    if(!response.ok)throw new Error('เชื่อมต่อ server ไม่สำเร็จ');
-    const payload=await response.json();
-    const known=new Set(requests.map(item=>item.id));
-    const incoming=(payload.requests||[]).filter(item=>!known.has(item.id));
-    if(incoming.length){
-      requests=[...incoming,...requests];
-      save();
-      render();
-      if(linePollReady){
-        const latest=incoming[0];
-        toast('มีคำขอใหม่จาก LINE',`${latest.system} · ${latest.reason}`);
-        if(Notification.permission==='granted'){
-          new Notification('Passly: คำขอ Password ใหม่',{body:`${latest.system} — ${latest.reason}`,tag:latest.id});
-        }
-      }
-    }
-    linePollReady=true;
-    $('#lineStatus').textContent=`เชื่อมต่อแล้ว · อัปเดตล่าสุด ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`;
-    $('#lineAlert').classList.remove('offline');
-  }catch(error){
-    $('#lineStatus').textContent=error.message;
-    $('#lineAlert').classList.add('offline');
+const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
+const THEME_KEY = "passly-theme";
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const nowIso = () => new Date().toISOString();
+const todayIso = () => nowIso().slice(0, 10);
+const typeMeta = {
+  login: { label: "Login", icon: "⌁" },
+  note: { label: "Secure Note", icon: "▤" },
+  card: { label: "Card", icon: "▰" },
+  identity: { label: "Identity", icon: "◎" },
+};
+const requestLabels = {
+  pending: "รออนุมัติ",
+  approved: "อนุมัติแล้ว",
+  delivered: "แจกสำเร็จ",
+  rejected: "ปฏิเสธ",
+};
+const pageTitles = {
+  dashboard: "ภาพรวม",
+  vault: "Vault",
+  requests: "คำขอ Password",
+  generator: "ตัวสร้างรหัส",
+  security: "รายงานความเสี่ยง",
+  collections: "Collections",
+  members: "สมาชิกและกลุ่ม",
+  activity: "Activity Log",
+  settings: "ตั้งค่า",
+};
+
+let vault = null;
+let vaultKey = null;
+let saveQueue = Promise.resolve();
+let activeView = "dashboard";
+let vaultFilter = "all";
+let vaultSearch = "";
+let generatorType = "password";
+let generatedValue = "";
+let detailItemId = null;
+let shareResult = null;
+let lockTimer = null;
+let lockDeadline = null;
+let countdownTimer = null;
+let lineInterval = null;
+let linePollReady = false;
+let requests = loadRequests();
+
+function escapeHtml(value = "") {
+  const element = document.createElement("div");
+  element.textContent = String(value);
+  return element.innerHTML;
+}
+
+function initials(name = "") {
+  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "U";
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "2-digit" }).format(date);
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function toast(title, message) {
+  $("#toastTitle").textContent = title;
+  $("#toastMessage").textContent = message;
+  $("#toast").classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 2800);
+}
+
+function openModal(id) {
+  $(`#${id}`).hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeModal(id) {
+  $(`#${id}`).hidden = true;
+  if (!$$(".modal-backdrop").some((modal) => !modal.hidden)) document.body.style.overflow = "";
+}
+
+function downloadFile(name, content, type = "application/json") {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([content], { type }));
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+async function copyText(value, title = "คัดลอกแล้ว") {
+  if (!navigator.clipboard?.writeText) throw new Error("เบราว์เซอร์ไม่อนุญาตให้คัดลอก");
+  await navigator.clipboard.writeText(value);
+  toast(title, "ข้อมูลอยู่ใน Clipboard ชั่วคราว");
+}
+
+function getStoredEnvelope() {
+  try {
+    return JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || "null");
+  } catch {
+    return null;
   }
 }
-$('#enableNotifications').onclick=async()=>{
-  if(!('Notification' in window))return toast('ไม่รองรับ','เบราว์เซอร์นี้ไม่รองรับ Desktop Notification');
-  const permission=await Notification.requestPermission();
-  toast(permission==='granted'?'เปิดแจ้งเตือนแล้ว':'ยังไม่ได้รับอนุญาต',permission==='granted'?'คำขอ LINE ใหม่จะแจ้งบนหน้าจอ':'เปิดได้ภายหลังจากการตั้งค่าเบราว์เซอร์');
-};
-pullLineRequests();
-setInterval(pullLineRequests,5000);
+
+function createEmptyVault() {
+  let legacyLark = {};
+  try { legacyLark = JSON.parse(localStorage.getItem("passly-lark") || "{}"); } catch { /* ignore */ }
+  return {
+    version: 1,
+    createdAt: nowIso(),
+    items: [],
+    folders: [
+      { id: crypto.randomUUID(), name: "General" },
+      { id: crypto.randomUUID(), name: "Social Media" },
+      { id: crypto.randomUUID(), name: "Infrastructure" },
+    ],
+    collections: [
+      { id: crypto.randomUUID(), name: "Marketing", description: "บัญชี Social Media และเครื่องมือสื่อสารการตลาด", members: "Marketing Team", permission: "edit", color: "#5b73e8" },
+      { id: crypto.randomUUID(), name: "IT & Network", description: "ระบบ Network, NAS, CCTV และอุปกรณ์สำนักงาน", members: "IT Admin", permission: "manage", color: "#168457" },
+    ],
+    members: [
+      { id: crypto.randomUUID(), name: "Fern Clinic Admin", email: "admin@fernclinic.local", role: "owner", status: "confirmed", collectionIds: [] },
+    ],
+    groups: [
+      { id: crypto.randomUUID(), name: "IT Admin", members: "Fern Clinic Admin", collectionId: "", permission: "manage" },
+    ],
+    generatorHistory: [],
+    activity: [{ id: crypto.randomUUID(), action: "สร้าง Vault", detail: "เริ่มต้น Passly Vault แบบเข้ารหัส", at: nowIso() }],
+    settings: {
+      lockTimeout: 5,
+      larkWebhook: legacyLark.webhook || "",
+      larkPrefix: legacyLark.prefix || "[Passly] ข้อมูลเข้าใช้งาน",
+    },
+  };
+}
+
+function migrateVaultData(data) {
+  data.items ||= [];
+  data.folders ||= [];
+  data.collections ||= [];
+  data.members ||= [];
+  data.groups ||= [];
+  data.generatorHistory ||= [];
+  data.activity ||= [];
+  data.settings ||= {};
+  data.settings.lockTimeout ||= 5;
+  data.settings.larkPrefix ||= "[Passly] ข้อมูลเข้าใช้งาน";
+  data.settings.larkWebhook ||= "";
+  return data;
+}
+
+async function persistVault() {
+  if (!vault || !vaultKey) return;
+  const snapshot = structuredClone(vault);
+  saveQueue = saveQueue.then(async () => {
+    const envelope = getStoredEnvelope();
+    if (!envelope) throw new Error("ไม่พบโครงสร้าง Vault");
+    const next = await encryptVault(snapshot, vaultKey, envelope);
+    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(next));
+  });
+  return saveQueue;
+}
+
+function addActivity(action, detail, itemId = null) {
+  if (!vault) return;
+  vault.activity.unshift({ id: crypto.randomUUID(), action, detail, itemId, at: nowIso() });
+  vault.activity = vault.activity.slice(0, 300);
+}
+
+function loadRequests() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REQUEST_STORAGE_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRequests() {
+  localStorage.setItem(REQUEST_STORAGE_KEY, JSON.stringify(requests.slice(0, 500)));
+}
+
+function activeItems() {
+  return vault?.items.filter((item) => !item.trashedAt) ?? [];
+}
+
+function loginItems() {
+  return activeItems().filter((item) => item.type === "login");
+}
+
+function itemLabel(item) {
+  if (item.type === "login") return item.username || item.uri || "ไม่มี Username";
+  if (item.type === "note") return "Secure Note";
+  if (item.type === "card") return item.cardNumber ? `•••• ${item.cardNumber.replace(/\s/g, "").slice(-4)}` : "Card";
+  return item.identityEmail || item.fullName || "Identity";
+}
+
+function strengthLabel(score) {
+  return ["เสี่ยงมาก", "อ่อน", "พอใช้", "แข็งแรง", "แข็งแรงมาก"][score] || "—";
+}
+
+function getSecurityReport() {
+  const logins = loginItems();
+  const passwordGroups = new Map();
+  logins.forEach((item) => {
+    if (!item.password) return;
+    const list = passwordGroups.get(item.password) || [];
+    list.push(item.id);
+    passwordGroups.set(item.password, list);
+  });
+  const findings = [];
+  const counts = { weak: 0, reused: 0, old: 0, incomplete: 0 };
+  for (const item of logins) {
+    const score = passwordScore(item.password);
+    if (score <= 1) {
+      counts.weak += 1;
+      findings.push({ item, type: "รหัสอ่อน", detail: "ควรเปลี่ยนเป็นรหัสสุ่มอย่างน้อย 14 ตัวอักษร", level: "high", weight: 4 });
+    }
+    if (item.password && (passwordGroups.get(item.password)?.length || 0) > 1) {
+      counts.reused += 1;
+      findings.push({ item, type: "รหัสซ้ำ", detail: "รหัสเดียวกันถูกใช้มากกว่าหนึ่งบัญชี", level: "high", weight: 4 });
+    }
+    const updated = new Date(item.passwordUpdatedAt || item.updatedAt || item.createdAt);
+    const ageDays = Number.isNaN(updated.getTime()) ? 0 : (Date.now() - updated.getTime()) / 86_400_000;
+    if (ageDays > 90) {
+      counts.old += 1;
+      findings.push({ item, type: "รหัสเก่า", detail: `ไม่ได้เปลี่ยนรหัสประมาณ ${Math.floor(ageDays)} วัน`, level: "medium", weight: 2 });
+    }
+    if (!item.username || !item.uri) {
+      counts.incomplete += 1;
+      findings.push({ item, type: "ข้อมูลไม่ครบ", detail: "ควรเพิ่ม Username และเว็บไซต์เพื่อค้นหาและตรวจสอบง่ายขึ้น", level: "medium", weight: 1 });
+    }
+  }
+  findings.sort((a, b) => b.weight - a.weight);
+  const penalty = counts.weak * 14 + counts.reused * 11 + counts.old * 5 + counts.incomplete * 3;
+  return { counts, findings, score: Math.max(0, 100 - Math.min(100, penalty)) };
+}
+
+function setLockScreenMode() {
+  const exists = Boolean(getStoredEnvelope());
+  $("#setupPanel").hidden = exists;
+  $("#unlockPanel").hidden = !exists;
+  $("#lockScreen").hidden = false;
+  $("#mainApp").hidden = true;
+  document.body.classList.remove("vault-open");
+  setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
+}
+
+function lockVault(reason = "ล็อก Vault แล้ว") {
+  vault = null;
+  vaultKey = null;
+  detailItemId = null;
+  shareResult = null;
+  clearTimeout(lockTimer);
+  clearInterval(countdownTimer);
+  clearInterval(lineInterval);
+  lockTimer = null;
+  countdownTimer = null;
+  lineInterval = null;
+  $$(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
+  document.body.style.overflow = "";
+  setLockScreenMode();
+  $("#unlockError").hidden = true;
+  if (reason) toast("Vault ถูกล็อก", reason);
+}
+
+function resetLockTimer() {
+  if (!vault) return;
+  clearTimeout(lockTimer);
+  clearInterval(countdownTimer);
+  const minutes = Number(vault.settings.lockTimeout || 5);
+  lockDeadline = Date.now() + minutes * 60_000;
+  lockTimer = setTimeout(() => lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด"), minutes * 60_000);
+  const updateCountdown = () => {
+    const remaining = Math.max(0, Math.ceil((lockDeadline - Date.now()) / 60_000));
+    $("#autoLockText").textContent = `ล็อกอัตโนมัติใน ${remaining} นาที`;
+  };
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 30_000);
+}
+
+function afterUnlock() {
+  $("#lockScreen").hidden = true;
+  $("#mainApp").hidden = false;
+  document.body.classList.add("vault-open");
+  $("#lockTimeout").value = String(vault.settings.lockTimeout || 5);
+  $("#larkWebhook").value = vault.settings.larkWebhook || "";
+  $("#larkPrefix").value = vault.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
+  renderAll();
+  showView(activeView);
+  resetLockTimer();
+  pullLineRequests();
+  clearInterval(lineInterval);
+  lineInterval = setInterval(pullLineRequests, 5000);
+  checkServerConfiguration();
+}
+
+function showView(view) {
+  activeView = pageTitles[view] ? view : "dashboard";
+  $$(".view").forEach((section) => { section.hidden = section.id !== `view-${activeView}`; });
+  $$(".nav-item[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
+  $("#currentPageTitle").textContent = pageTitles[activeView];
+  $(".sidebar").classList.remove("open");
+  if (activeView === "security") renderSecurity();
+  if (activeView === "generator") renderGeneratorHistory();
+  history.replaceState(null, "", `#${activeView}`);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderAll() {
+  if (!vault) return;
+  renderSelectOptions();
+  renderDashboard();
+  renderVault();
+  renderRequests();
+  renderCollections();
+  renderMembers();
+  renderActivity();
+  renderGeneratorHistory();
+  renderSecurity();
+}
+
+function renderDashboard() {
+  const items = activeItems();
+  const logins = loginItems();
+  const report = getSecurityReport();
+  $("#dashboardItemCount").textContent = items.length;
+  $("#dashboardLoginCount").textContent = `${logins.length} logins`;
+  $("#dashboardHealthScore").textContent = report.score;
+  $("#dashboardRiskCount").textContent = report.findings.length;
+  $("#dashboardPendingCount").textContent = requests.filter((request) => request.status === "pending").length;
+  $("#navVaultCount").textContent = items.length;
+  $("#navRequestCount").textContent = requests.filter((request) => request.status === "pending").length;
+  $("#navRiskDot").hidden = report.findings.length === 0;
+
+  const recent = [...items].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 5);
+  $("#recentVaultItems").innerHTML = recent.length ? recent.map((item) => `
+    <article class="recent-item">
+      <span class="vault-item-icon ${item.type}">${typeMeta[item.type]?.icon || "▣"}</span>
+      <div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(itemLabel(item))} · ${typeMeta[item.type]?.label}</small></div>
+      <button data-item-view="${item.id}">เปิด →</button>
+    </article>
+  `).join("") : `<div class="empty-state compact"><div>▣</div><h3>Vault ยังว่าง</h3><p>เพิ่มรายการแรกหรือนำเข้า Excel</p></div>`;
+
+  const risks = [
+    { label: "รหัสอ่อน", value: report.counts.weak, color: "#c74e4e" },
+    { label: "รหัสซ้ำ", value: report.counts.reused, color: "#d77935" },
+    { label: "รหัสเกิน 90 วัน", value: report.counts.old, color: "#735dc1" },
+    { label: "ข้อมูลไม่ครบ", value: report.counts.incomplete, color: "#3e6fe0" },
+  ];
+  $("#securitySummary").innerHTML = risks.map((risk) => `
+    <div class="summary-row"><span style="background:${risk.color}"></span><strong>${risk.label}</strong><small>${risk.value} รายการ</small></div>
+  `).join("");
+
+  const latestRequests = [...requests].slice(0, 3);
+  $("#requestPreview").innerHTML = latestRequests.length ? latestRequests.map((request) => `
+    <article class="request-preview-item">
+      <span class="avatar">${escapeHtml(initials(request.name))}</span>
+      <div><strong>${escapeHtml(request.name)}</strong><small>${escapeHtml(request.system)} · ${requestLabels[request.status] || request.status}</small></div>
+    </article>
+  `).join("") : `<div class="empty-state compact"><div>◇</div><h3>ยังไม่มีคำขอ</h3></div>`;
+}
+
+function filteredVaultItems() {
+  const folderId = $("#folderFilter").value;
+  const collectionId = $("#collectionFilter").value;
+  const sort = $("#vaultSort").value;
+  let items = vault.items.filter((item) => vaultFilter === "trash" ? Boolean(item.trashedAt) : !item.trashedAt);
+  if (vaultFilter === "favorite") items = items.filter((item) => item.favorite);
+  else if (["login", "note", "card", "identity"].includes(vaultFilter)) items = items.filter((item) => item.type === vaultFilter);
+  if (folderId !== "all") items = items.filter((item) => item.folderId === folderId);
+  if (collectionId !== "all") items = items.filter((item) => item.collectionId === collectionId);
+  if (vaultSearch) {
+    const term = vaultSearch.toLowerCase();
+    items = items.filter((item) => `${item.name} ${item.username || ""} ${item.uri || ""} ${item.owner || ""} ${item.notes || ""}`.toLowerCase().includes(term));
+  }
+  if (sort === "name") items.sort((a, b) => a.name.localeCompare(b.name, "th"));
+  else if (sort === "strength") items.sort((a, b) => passwordScore(a.password) - passwordScore(b.password));
+  else items.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  return items;
+}
+
+function renderVault() {
+  const items = filteredVaultItems();
+  $("#filterAllCount").textContent = activeItems().length;
+  $("#vaultList").innerHTML = items.map((item) => {
+    const score = item.type === "login" ? passwordScore(item.password) : 4;
+    const folder = vault.folders.find((entry) => entry.id === item.folderId)?.name || "ไม่มี Folder";
+    const collection = vault.collections.find((entry) => entry.id === item.collectionId)?.name || "My Vault";
+    return `
+      <article class="vault-row">
+        <div class="vault-main">
+          <span class="vault-item-icon ${item.type}">${typeMeta[item.type]?.icon || "▣"}</span>
+          <div><strong>${escapeHtml(item.name)}${item.favorite ? '<span class="favorite-star">★</span>' : ""}</strong><small>${escapeHtml(itemLabel(item))}</small></div>
+        </div>
+        <div class="vault-meta"><strong>${escapeHtml(item.owner || collection)}</strong><small>${escapeHtml(folder)} · ${escapeHtml(collection)}</small></div>
+        <span class="strength-badge strength-${score}">${item.type === "login" ? strengthLabel(score) : typeMeta[item.type]?.label}</span>
+        <span class="vault-updated">${formatDate(item.updatedAt)}</span>
+        <div class="row-actions">
+          ${item.trashedAt ? `<button data-item-restore="${item.id}">กู้คืน</button><button data-item-delete-forever="${item.id}">ลบถาวร</button>` : `<button data-item-favorite="${item.id}" title="Favorite">${item.favorite ? "★" : "☆"}</button><button data-item-view="${item.id}">เปิด</button><button data-item-edit="${item.id}">แก้ไข</button>`}
+        </div>
+      </article>
+    `;
+  }).join("");
+  $("#vaultEmpty").hidden = items.length > 0;
+  $("#vaultList").hidden = items.length === 0;
+}
+
+function renderSelectOptions() {
+  const folderOptions = vault.folders.map((folder) => `<option value="${folder.id}">${escapeHtml(folder.name)}</option>`).join("");
+  const collectionOptions = vault.collections.map((collection) => `<option value="${collection.id}">${escapeHtml(collection.name)}</option>`).join("");
+  const currentFolderFilter = $("#folderFilter").value || "all";
+  const currentCollectionFilter = $("#collectionFilter").value || "all";
+  $("#folderFilter").innerHTML = `<option value="all">ทุก Folder</option>${folderOptions}`;
+  $("#collectionFilter").innerHTML = `<option value="all">ทุก Collection</option>${collectionOptions}`;
+  $("#itemFolderSelect").innerHTML = `<option value="">ไม่มี Folder</option>${folderOptions}`;
+  $("#itemCollectionSelect").innerHTML = `<option value="">My Vault</option>${collectionOptions}`;
+  $("#groupCollectionSelect").innerHTML = `<option value="">ยังไม่กำหนด</option>${collectionOptions}`;
+  $("#folderFilter").value = currentFolderFilter;
+  $("#collectionFilter").value = currentCollectionFilter;
+  $("#vaultSystemList").innerHTML = loginItems().map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
+}
+
+function renderRequests() {
+  const term = $("#requestSearch").value.trim().toLowerCase();
+  const status = $("#requestStatusFilter").value;
+  const filtered = requests.filter((request) => {
+    const matchesTerm = !term || `${request.name} ${request.email} ${request.system} ${request.reason}`.toLowerCase().includes(term);
+    return matchesTerm && (status === "all" || request.status === status);
+  });
+  $("#requestTableBody").innerHTML = filtered.map((request) => `
+    <tr>
+      <td><div class="user-cell"><span class="avatar">${escapeHtml(initials(request.name))}</span><div><strong>${escapeHtml(request.name)}${request.urgent ? '<em class="urgent-dot">ด่วน</em>' : ""}</strong><small>${escapeHtml(request.email)}</small></div></div></td>
+      <td><strong>${escapeHtml(request.system)}</strong><small class="vault-updated">${request.source === "LINE" ? "จาก LINE" : "บันทึกในเว็บ"}</small></td>
+      <td class="reason-cell">${escapeHtml(request.reason)}</td>
+      <td>${formatDate(request.date)}</td>
+      <td><span class="status ${request.status}">${requestLabels[request.status] || request.status}</span></td>
+      <td><div class="row-actions">
+        ${request.status === "pending" ? `<button class="action-approve" data-request-approve="${request.id}">อนุมัติ</button><button data-request-reject="${request.id}">ปฏิเสธ</button>` : ""}
+        ${request.status === "approved" ? `<button class="action-share" data-request-share="${request.id}">แจกจาก Vault</button>` : ""}
+        <button data-request-edit="${request.id}">แก้ไข</button><button data-request-delete="${request.id}">ลบ</button>
+      </div></td>
+    </tr>
+  `).join("");
+  $("#requestEmpty").hidden = filtered.length > 0;
+  $("#requestTableBody").closest("table").hidden = filtered.length === 0;
+  $("#navRequestCount").textContent = requests.filter((request) => request.status === "pending").length;
+}
+
+function renderGeneratorHistory() {
+  if (!vault) return;
+  $("#generatorHistory").innerHTML = vault.generatorHistory.length ? vault.generatorHistory.map((entry) => `
+    <div class="history-row"><div><strong>${escapeHtml(entry.value)}</strong><small>${entry.type === "passphrase" ? "Passphrase" : "Password"} · ${formatDateTime(entry.at)}</small></div><button data-history-copy="${entry.id}">คัดลอก</button></div>
+  `).join("") : `<div class="empty-state compact"><div>✦</div><h3>ยังไม่มีประวัติ</h3><p>รหัสที่สร้างจะปรากฏที่นี่</p></div>`;
+}
+
+function renderSecurity() {
+  if (!vault) return;
+  const report = getSecurityReport();
+  $("#healthScore").textContent = report.score;
+  $("#healthRing").style.strokeDashoffset = String(314 - 314 * report.score / 100);
+  const health = report.score >= 85 ? ["ยอดเยี่ยม", "Vault มีสุขภาพดี"] : report.score >= 60 ? ["ควรปรับปรุง", "มีบางรายการที่ควรแก้ไข"] : ["ความเสี่ยงสูง", "ควรแก้ไขรายการสำคัญทันที"];
+  $("#healthLabel").textContent = health[0];
+  $("#healthDescription").textContent = report.findings.length ? `${health[1]} พบ ${report.findings.length} ประเด็น` : "ยังไม่พบรายการที่ต้องแก้ไข";
+  const cards = [
+    ["รหัสอ่อน", report.counts.weak, "ควรใช้ Generator"],
+    ["รหัสซ้ำ", report.counts.reused, "ควรใช้รหัสไม่ซ้ำกัน"],
+    ["รหัสเก่า", report.counts.old, "เกิน 90 วัน"],
+    ["ข้อมูลไม่ครบ", report.counts.incomplete, "ไม่มี Username หรือ URL"],
+  ];
+  $("#riskCards").innerHTML = cards.map(([label, value, note]) => `<article class="risk-card"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join("");
+  $("#securityFindings").innerHTML = report.findings.length ? report.findings.map((finding) => `
+    <div class="finding-row"><span class="finding-level ${finding.level === "high" ? "high" : ""}"></span><div><strong>${escapeHtml(finding.item.name)} · ${finding.type}</strong><small>${escapeHtml(finding.detail)}</small></div><button data-item-edit="${finding.item.id}">แก้ไข →</button></div>
+  `).join("") : `<div class="empty-state compact"><div>✓</div><h3>ยังไม่พบความเสี่ยง</h3><p>เพิ่ม Login แล้ว Passly จะตรวจสอบให้อัตโนมัติ</p></div>`;
+  $("#navRiskDot").hidden = report.findings.length === 0;
+}
+
+function renderCollections() {
+  $("#collectionGrid").innerHTML = vault.collections.length ? vault.collections.map((collection) => {
+    const count = activeItems().filter((item) => item.collectionId === collection.id).length;
+    const permission = { view: "ดูข้อมูล", edit: "ดูและแก้ไข", manage: "จัดการ Collection" }[collection.permission] || collection.permission;
+    return `
+      <article class="collection-card">
+        <span class="collection-accent" style="background:${collection.color}"></span>
+        <div class="collection-top"><span class="collection-icon" style="background:${collection.color}">⊞</span><div><strong>${escapeHtml(collection.name)}</strong><small>${count} รายการ</small></div></div>
+        <p>${escapeHtml(collection.description || "ยังไม่มีคำอธิบาย")}</p>
+        <div class="collection-meta"><span>${escapeHtml(collection.members || "ยังไม่ระบุกลุ่ม")}</span><span>${escapeHtml(permission)}</span></div>
+        <div class="collection-actions"><button data-collection-edit="${collection.id}">แก้ไข</button><button data-collection-open="${collection.id}">เปิดรายการ</button><button data-collection-delete="${collection.id}">ลบ</button></div>
+      </article>
+    `;
+  }).join("") : `<div class="empty-state"><div>⊞</div><h3>ยังไม่มี Collection</h3></div>`;
+  $("#folderList").innerHTML = vault.folders.length ? vault.folders.map((folder) => {
+    const count = activeItems().filter((item) => item.folderId === folder.id).length;
+    return `<span class="folder-pill">▱ ${escapeHtml(folder.name)} <small>${count}</small><button data-folder-rename="${folder.id}">✎</button><button data-folder-delete="${folder.id}">×</button></span>`;
+  }).join("") : `<span class="vault-updated">ยังไม่มี Folder</span>`;
+}
+
+function renderMembers() {
+  const members = vault.members || [];
+  const groups = vault.groups || [];
+  $("#memberCount").textContent = members.length;
+  $("#confirmedMemberCount").textContent = members.filter((member) => member.status === "confirmed").length;
+  $("#invitedMemberCount").textContent = members.filter((member) => member.status === "invited").length;
+  $("#groupCount").textContent = groups.length;
+  $("#memberTableBody").innerHTML = members.map((member) => {
+    const collections = (member.collectionIds || []).map((id) => vault.collections.find((collection) => collection.id === id)?.name).filter(Boolean);
+    const statusLabel = { invited: "Invited", confirmed: "Confirmed", revoked: "Revoked" }[member.status] || member.status;
+    const statusClass = member.status === "confirmed" ? "approved" : member.status === "invited" ? "pending" : "rejected";
+    return `
+      <tr>
+        <td><div class="user-cell"><span class="avatar">${escapeHtml(initials(member.name))}</span><div><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(member.email)}</small></div></div></td>
+        <td>${escapeHtml(member.role)}</td>
+        <td>${escapeHtml(collections.join(", ") || "ยังไม่กำหนด")}</td>
+        <td><span class="status ${statusClass}">${statusLabel}</span></td>
+        <td><div class="row-actions"><button data-member-edit="${member.id}">แก้ไข</button><button data-member-toggle="${member.id}">${member.status === "revoked" ? "คืนสิทธิ์" : "ระงับ"}</button><button data-member-delete="${member.id}">ลบ</button></div></td>
+      </tr>
+    `;
+  }).join("");
+  $("#memberEmpty").hidden = members.length > 0;
+  $("#memberTableBody").closest("table").hidden = members.length === 0;
+  $("#groupGrid").innerHTML = groups.length ? groups.map((group) => {
+    const collection = vault.collections.find((entry) => entry.id === group.collectionId);
+    const permission = { view: "ดูข้อมูล", edit: "ดูและแก้ไข", manage: "จัดการ Collection" }[group.permission] || group.permission;
+    return `
+      <article class="group-card">
+        <div><span class="collection-icon">◎</span><div><h3>${escapeHtml(group.name)}</h3><small>${escapeHtml(collection?.name || "ยังไม่กำหนด Collection")}</small></div></div>
+        <p>${escapeHtml(group.members || "ยังไม่ระบุสมาชิก")}</p>
+        <small>สิทธิ์: ${escapeHtml(permission)}</small>
+        <div class="collection-actions"><button data-group-edit="${group.id}">แก้ไข</button><button data-group-delete="${group.id}">ลบ</button></div>
+      </article>
+    `;
+  }).join("") : `<div class="empty-state compact"><div>◎</div><h3>ยังไม่มีกลุ่ม</h3></div>`;
+}
+
+function renderActivity() {
+  $("#activityList").innerHTML = vault.activity.length ? vault.activity.map((entry) => `
+    <div class="activity-row"><span class="activity-icon">↻</span><div><strong>${escapeHtml(entry.action)}</strong><small>${escapeHtml(entry.detail)}</small></div><time>${formatDateTime(entry.at)}</time></div>
+  `).join("") : `<div class="empty-state compact"><div>↻</div><h3>ยังไม่มีกิจกรรม</h3></div>`;
+}
+
+function updateItemFields(type) {
+  $$("[data-item-fields]").forEach((section) => { section.hidden = section.dataset.itemFields !== type; });
+}
+
+function openItemEditor(itemId = null, preset = {}) {
+  const form = $("#itemForm");
+  form.reset();
+  form.elements.id.value = itemId || "";
+  const item = itemId ? vault.items.find((entry) => entry.id === itemId) : null;
+  const data = { type: "login", ...preset, ...(item || {}) };
+  form.elements.type.value = data.type;
+  updateItemFields(data.type);
+  const fields = [
+    "name", "username", "password", "uri", "purpose", "passwordUpdatedAt", "previousPassword",
+    "secureNote", "cardholder", "brand", "cardNumber", "cardExpiry", "cardCvv",
+    "fullName", "identityEmail", "phone", "idNumber", "address", "folderId",
+    "collectionId", "owner", "notes",
+  ];
+  fields.forEach((field) => {
+    if (form.elements[field]) form.elements[field].value = data[field] || "";
+  });
+  form.elements.favorite.checked = Boolean(data.favorite);
+  form.elements.reprompt.checked = Boolean(data.reprompt);
+  $("#itemModalTitle").textContent = item ? "แก้ไขรายการใน Vault" : "เพิ่มรายการใน Vault";
+  form.elements.password.type = "password";
+  $("#toggleItemPassword").textContent = "ดู";
+  openModal("itemModal");
+  setTimeout(() => form.elements.name.focus(), 60);
+}
+
+async function verifyMasterPassword(message = "ยืนยัน Master Password เพื่อเปิดข้อมูลนี้") {
+  const password = prompt(message);
+  if (password === null) return false;
+  try {
+    await unlockVaultEnvelope(getStoredEnvelope(), password);
+    return true;
+  } catch {
+    toast("ยืนยันไม่สำเร็จ", "Master Password ไม่ถูกต้อง");
+    return false;
+  }
+}
+
+async function openItemDetail(itemId) {
+  const item = vault.items.find((entry) => entry.id === itemId);
+  if (!item || item.trashedAt) return;
+  if (item.reprompt && !await verifyMasterPassword()) return;
+  detailItemId = itemId;
+  addActivity("เปิดดูรายการ", item.name, item.id);
+  persistVault();
+  const meta = typeMeta[item.type] || typeMeta.login;
+  let fields = "";
+  if (item.type === "login") {
+    fields = `
+      <div class="detail-field"><span>Username</span><strong>${escapeHtml(item.username || "—")}</strong><div><button data-detail-copy="username">คัดลอก</button></div></div>
+      <div class="detail-field"><span>Password</span><strong id="detailPassword">••••••••••••</strong><div><button data-detail-toggle-password>แสดง</button><button data-detail-copy="password">คัดลอก</button></div></div>
+      <div class="detail-field"><span>Website / URI</span><strong>${escapeHtml(item.uri || "—")}</strong><div>${item.uri ? '<button data-detail-launch>เปิดเว็บ</button>' : ""}</div></div>
+      <div class="detail-field"><span>อัปเดตรหัสล่าสุด</span><strong>${formatDate(item.passwordUpdatedAt || item.updatedAt)}</strong></div>
+    `;
+  } else if (item.type === "note") {
+    fields = `<div class="detail-notes">${escapeHtml(item.secureNote || item.notes || "—")}</div>`;
+  } else if (item.type === "card") {
+    fields = `
+      <div class="detail-field"><span>ชื่อบนบัตร</span><strong>${escapeHtml(item.cardholder || "—")}</strong></div>
+      <div class="detail-field"><span>หมายเลขบัตร</span><strong id="detailCard">•••• •••• •••• ${escapeHtml((item.cardNumber || "").replace(/\s/g, "").slice(-4))}</strong><div><button data-detail-toggle-card>แสดง</button><button data-detail-copy="cardNumber">คัดลอก</button></div></div>
+      <div class="field-row"><div class="detail-field"><span>วันหมดอายุ</span><strong>${escapeHtml(item.cardExpiry || "—")}</strong></div><div class="detail-field"><span>CVV</span><strong>•••</strong><div><button data-detail-copy="cardCvv">คัดลอก</button></div></div></div>
+    `;
+  } else {
+    fields = `
+      <div class="detail-field"><span>ชื่อ-นามสกุล</span><strong>${escapeHtml(item.fullName || "—")}</strong></div>
+      <div class="detail-field"><span>อีเมล</span><strong>${escapeHtml(item.identityEmail || "—")}</strong><div><button data-detail-copy="identityEmail">คัดลอก</button></div></div>
+      <div class="detail-field"><span>โทรศัพท์</span><strong>${escapeHtml(item.phone || "—")}</strong></div>
+      <div class="detail-field"><span>เลขประจำตัว</span><strong>${escapeHtml(item.idNumber || "—")}</strong></div>
+      <div class="detail-notes">${escapeHtml(item.address || "—")}</div>
+    `;
+  }
+  $("#itemDetailContent").innerHTML = `
+    <div class="detail-heading"><span class="vault-item-icon ${item.type}">${meta.icon}</span><div><p class="eyebrow">${meta.label}</p><h2>${escapeHtml(item.name)}</h2><small>${escapeHtml(item.owner || "Fern Clinic")} · แก้ไข ${formatDateTime(item.updatedAt)}</small></div><button class="icon-action" data-item-favorite="${item.id}">${item.favorite ? "★" : "☆"}</button></div>
+    ${fields}
+    ${item.notes && item.type !== "note" ? `<div class="detail-notes">${escapeHtml(item.notes)}</div>` : ""}
+    <div class="detail-actions">${item.type === "login" ? '<button class="primary-btn" data-detail-share>สร้าง Secure Share</button>' : ""}<button class="secondary-btn" data-item-edit="${item.id}">แก้ไข</button><button class="danger-btn" data-item-trash="${item.id}">ย้ายไป Trash</button></div>
+  `;
+  openModal("itemDetailModal");
+}
+
+function openRequestEditor(requestId = null) {
+  const form = $("#requestForm");
+  form.reset();
+  const request = requestId ? requests.find((entry) => entry.id === requestId) : null;
+  form.elements.id.value = request?.id || "";
+  ["name", "email", "system", "reason", "status"].forEach((field) => {
+    if (request) form.elements[field].value = request[field] || "";
+  });
+  form.elements.status.value = request?.status || "pending";
+  form.elements.urgent.checked = Boolean(request?.urgent);
+  $("#requestModalTitle").textContent = request ? "แก้ไขคำขอ" : "เพิ่มคำขอ";
+  openModal("requestModal");
+}
+
+function generateSharePin() {
+  return generatePassword({ length: 8, uppercase: true, lowercase: true, numbers: true, symbols: false, avoidAmbiguous: true });
+}
+
+async function openDeliverForRequest(requestId, presetItemId = null) {
+  const request = requests.find((entry) => entry.id === requestId);
+  const items = loginItems();
+  if (!request) return;
+  if (!items.length) {
+    toast("ยังไม่มี Login ใน Vault", "เพิ่มหรือนำเข้ารายการก่อนแจกข้อมูล");
+    showView("vault");
+    return;
+  }
+  const form = $("#deliverForm");
+  form.reset();
+  form.elements.requestId.value = request.id;
+  $("#deliverSummary").textContent = `ผู้รับ: ${request.name} · ระบบ: ${request.system}`;
+  $("#deliverItemSelect").innerHTML = items.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} — ${escapeHtml(item.username || "ไม่มี Username")}</option>`).join("");
+  const match = presetItemId || items.find((item) => item.name.toLowerCase().includes(request.system.toLowerCase()) || request.system.toLowerCase().includes(item.name.toLowerCase()))?.id;
+  if (match) form.elements.itemId.value = match;
+  form.elements.pin.value = generateSharePin();
+  openModal("deliverModal");
+}
+
+function updateGenerator() {
+  try {
+    if (generatorType === "password") {
+      generatedValue = generatePassword({
+        length: Number($("#passwordLength").value),
+        uppercase: $("#genUpper").checked,
+        lowercase: $("#genLower").checked,
+        numbers: $("#genNumbers").checked,
+        symbols: $("#genSymbols").checked,
+        avoidAmbiguous: $("#genAmbiguous").checked,
+      });
+    } else {
+      generatedValue = generatePassphrase({
+        words: Number($("#wordCount").value),
+        separator: $("#wordSeparator").value || "-",
+        capitalize: $("#wordCapitalize").checked,
+        includeNumber: $("#wordNumber").checked,
+      });
+    }
+    $("#generatedValue").textContent = generatedValue;
+    const score = passwordScore(generatedValue);
+    $("#generatorStrengthLabel").textContent = strengthLabel(score);
+    $("#generatorStrengthBar").style.width = `${Math.max(20, score * 25)}%`;
+    $("#generatorStrengthBar").style.background = ["#c74e4e", "#c74e4e", "#d77935", "#3e6fe0", "#168457"][score];
+  } catch (error) {
+    toast("สร้างรหัสไม่ได้", error.message);
+  }
+}
+
+async function saveGeneratedHistory() {
+  vault.generatorHistory.unshift({ id: crypto.randomUUID(), type: generatorType, value: generatedValue, at: nowIso() });
+  vault.generatorHistory = vault.generatorHistory.slice(0, 20);
+  addActivity("สร้างรหัสใหม่", generatorType === "password" ? "Password" : "Passphrase");
+  await persistVault();
+  renderGeneratorHistory();
+}
+
+function openCollectionEditor(id = null) {
+  const form = $("#collectionForm");
+  form.reset();
+  const collection = id ? vault.collections.find((entry) => entry.id === id) : null;
+  form.elements.id.value = collection?.id || "";
+  ["name", "description", "members", "permission", "color"].forEach((field) => {
+    form.elements[field].value = collection?.[field] || (field === "color" ? "#5b73e8" : "");
+  });
+  $("#collectionModalTitle").textContent = collection ? "แก้ไข Collection" : "สร้าง Collection";
+  openModal("collectionModal");
+}
+
+function openMemberEditor(id = null) {
+  const form = $("#memberForm");
+  form.reset();
+  const member = id ? vault.members.find((entry) => entry.id === id) : null;
+  form.elements.id.value = member?.id || "";
+  form.elements.name.value = member?.name || "";
+  form.elements.email.value = member?.email || "";
+  form.elements.role.value = member?.role || "member";
+  form.elements.status.value = member?.status || "invited";
+  const selected = new Set(member?.collectionIds || []);
+  $("#memberCollectionChecks").innerHTML = vault.collections.length ? vault.collections.map((collection) => `
+    <label><input type="checkbox" name="collectionIds" value="${collection.id}" ${selected.has(collection.id) ? "checked" : ""} /> ${escapeHtml(collection.name)}</label>
+  `).join("") : `<span class="vault-updated">สร้าง Collection ก่อนกำหนดสิทธิ์</span>`;
+  $("#memberModalTitle").textContent = member ? "แก้ไขสมาชิก" : "เพิ่มสมาชิก";
+  openModal("memberModal");
+}
+
+function openGroupEditor(id = null) {
+  const form = $("#groupForm");
+  form.reset();
+  const group = id ? vault.groups.find((entry) => entry.id === id) : null;
+  form.elements.id.value = group?.id || "";
+  form.elements.name.value = group?.name || "";
+  form.elements.members.value = group?.members || "";
+  form.elements.collectionId.value = group?.collectionId || "";
+  form.elements.permission.value = group?.permission || "view";
+  $("#groupModalTitle").textContent = group ? "แก้ไขกลุ่ม" : "สร้างกลุ่ม";
+  openModal("groupModal");
+}
+
+async function sendLark(text) {
+  const response = await fetch("/api/lark", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ webhook: vault.settings.larkWebhook || "", text }),
+  });
+  const result = await response.json();
+  if (!response.ok || result.ok === false) throw new Error(result.error || "Lark ส่งข้อความไม่สำเร็จ");
+}
+
+async function checkServerConfiguration() {
+  try {
+    const result = await fetch("/api/health", { cache: "no-store" }).then((response) => response.json());
+    $("#lineConfigStatus").textContent = result.lineConfigured && result.lineReplyConfigured
+      ? `พร้อมใช้งาน${result.lineGroupRestricted ? " · จำกัดเฉพาะกลุ่มที่กำหนด" : ""}`
+      : "ยังตั้งค่า LINE Channel บน Server ไม่ครบ";
+  } catch {
+    $("#lineConfigStatus").textContent = "ตรวจสอบ Server ไม่สำเร็จ";
+  }
+}
+
+async function pullLineRequests() {
+  if (!vault) return;
+  try {
+    const response = await fetch("/api/requests", { cache: "no-store" });
+    if (!response.ok) throw new Error("เชื่อมต่อ Server ไม่สำเร็จ");
+    const payload = await response.json();
+    const known = new Set(requests.map((request) => request.id));
+    const incoming = (payload.requests || []).filter((request) => !known.has(request.id));
+    if (incoming.length) {
+      requests = [...incoming, ...requests];
+      saveRequests();
+      renderRequests();
+      renderDashboard();
+      if (linePollReady) {
+        const latest = incoming[0];
+        toast("มีคำขอใหม่จาก LINE", `${latest.system} · ${latest.reason}`);
+        if ("Notification" in window && Notification.permission === "granted") new Notification("Passly: คำขอ Password ใหม่", { body: `${latest.system} — ${latest.reason}`, tag: latest.id });
+      }
+    }
+    linePollReady = true;
+    $("#lineStatus").textContent = `เชื่อมต่อแล้ว · อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`;
+    $("#lineAlert").classList.remove("offline");
+  } catch (error) {
+    $("#lineStatus").textContent = error.message;
+    $("#lineAlert").classList.add("offline");
+  }
+}
+
+async function importCredentialFile(file) {
+  const imported = await readCredentialFile(file);
+  let importedCollection = vault.collections.find((collection) => collection.name === "Imported Excel");
+  if (!importedCollection) {
+    importedCollection = { id: crypto.randomUUID(), name: "Imported Excel", description: "ข้อมูลที่นำเข้าจากไฟล์รายการรหัสเดิม", members: "IT Admin", permission: "manage", color: "#735dc1" };
+    vault.collections.push(importedCollection);
+  }
+  let importedFolder = vault.folders.find((folder) => folder.name === "Imported");
+  if (!importedFolder) {
+    importedFolder = { id: crypto.randomUUID(), name: "Imported" };
+    vault.folders.push(importedFolder);
+  }
+  const existing = new Set(activeItems().map((item) => `${item.name}|${item.username || ""}|${item.uri || ""}`.toLowerCase()));
+  let added = 0;
+  let skipped = 0;
+  for (const record of imported) {
+    const key = `${record.name || ""}|${record.username || ""}|${record.uri || ""}`.toLowerCase();
+    if (existing.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    const timestamp = nowIso();
+    vault.items.push({
+      id: crypto.randomUUID(),
+      type: ["login", "note", "card", "identity"].includes(record.type) ? record.type : "login",
+      name: record.name || record.username || "Imported Login",
+      username: record.username || "",
+      password: record.password || "",
+      previousPassword: record.previousPassword || "",
+      uri: /^https?:\/\//i.test(record.uri || "") ? record.uri : "",
+      purpose: record.purpose || "",
+      owner: record.owner || "",
+      notes: record.notes || "",
+      passwordUpdatedAt: record.passwordUpdatedAt || todayIso(),
+      folderId: importedFolder.id,
+      collectionId: importedCollection.id,
+      favorite: false,
+      reprompt: false,
+      history: record.previousPassword ? [{ password: record.previousPassword, at: timestamp }] : [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    existing.add(key);
+    added += 1;
+  }
+  addActivity("นำเข้าข้อมูล", `${file.name}: เพิ่ม ${added} รายการ ข้ามรายการซ้ำ ${skipped}`);
+  await persistVault();
+  renderAll();
+  showView("vault");
+  toast("นำเข้าสำเร็จ", `เพิ่ม ${added} รายการ · ข้ามรายการซ้ำ ${skipped}`);
+}
+
+$("#setupForm").addEventListener("input", (event) => {
+  if (event.target.name !== "password") return;
+  const score = passwordScore(event.target.value);
+  $("#masterMeter").style.width = `${score * 25}%`;
+  $("#masterMeter").style.background = ["#c74e4e", "#c74e4e", "#d77935", "#3e6fe0", "#168457"][score];
+});
+
+$("#setupForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (form.elements.password.value !== form.elements.confirmPassword.value) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
+  if (passwordScore(form.elements.password.value) < 2) return toast("Master Password อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  const button = form.querySelector("button[type=submit]");
+  button.disabled = true;
+  button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
+  try {
+    vault = createEmptyVault();
+    const result = await createVaultEnvelope(vault, form.elements.password.value);
+    vaultKey = result.key;
+    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(result.envelope));
+    localStorage.removeItem("passly-lark");
+    form.reset();
+    afterUnlock();
+    toast("สร้าง Passly Vault แล้ว", "ข้อมูลพร้อมบันทึกแบบเข้ารหัส");
+  } catch (error) {
+    toast("สร้าง Vault ไม่สำเร็จ", error.message);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'สร้าง Vault ที่เข้ารหัส <span>→</span>';
+  }
+});
+
+$("#unlockForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button");
+  button.disabled = true;
+  button.textContent = "กำลังถอดรหัส…";
+  $("#unlockError").hidden = true;
+  try {
+    const result = await unlockVaultEnvelope(getStoredEnvelope(), event.currentTarget.elements.password.value);
+    vaultKey = result.key;
+    vault = migrateVaultData(result.vault);
+    event.currentTarget.reset();
+    afterUnlock();
+  } catch {
+    $("#unlockError").textContent = "Master Password ไม่ถูกต้อง หรือ Vault เสียหาย";
+    $("#unlockError").hidden = false;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'ปลดล็อก Vault <span>→</span>';
+  }
+});
+
+$("#itemForm").addEventListener("change", (event) => {
+  if (event.target.name === "type") updateItemFields(event.target.value);
+});
+
+$("#itemForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const id = form.elements.id.value;
+  const existing = id ? vault.items.find((item) => item.id === id) : null;
+  const timestamp = nowIso();
+  const item = existing || { id: crypto.randomUUID(), createdAt: timestamp, history: [] };
+  if (existing?.type === "login" && existing.password && existing.password !== form.elements.password.value) {
+    item.history = [{ password: existing.password, at: timestamp }, ...(existing.history || [])].slice(0, 10);
+  }
+  Object.assign(item, {
+    type: form.elements.type.value,
+    name: form.elements.name.value.trim(),
+    username: form.elements.username.value.trim(),
+    password: form.elements.password.value,
+    uri: form.elements.uri.value.trim(),
+    purpose: form.elements.purpose.value.trim(),
+    passwordUpdatedAt: form.elements.passwordUpdatedAt.value || todayIso(),
+    previousPassword: form.elements.previousPassword.value,
+    secureNote: form.elements.secureNote.value,
+    cardholder: form.elements.cardholder.value.trim(),
+    brand: form.elements.brand.value.trim(),
+    cardNumber: form.elements.cardNumber.value.trim(),
+    cardExpiry: form.elements.cardExpiry.value.trim(),
+    cardCvv: form.elements.cardCvv.value,
+    fullName: form.elements.fullName.value.trim(),
+    identityEmail: form.elements.identityEmail.value.trim(),
+    phone: form.elements.phone.value.trim(),
+    idNumber: form.elements.idNumber.value.trim(),
+    address: form.elements.address.value.trim(),
+    folderId: form.elements.folderId.value,
+    collectionId: form.elements.collectionId.value,
+    owner: form.elements.owner.value.trim(),
+    notes: form.elements.notes.value.trim(),
+    favorite: form.elements.favorite.checked,
+    reprompt: form.elements.reprompt.checked,
+    trashedAt: null,
+    updatedAt: timestamp,
+  });
+  if (!existing) vault.items.push(item);
+  addActivity(existing ? "แก้ไขรายการ" : "เพิ่มรายการ", item.name, item.id);
+  await persistVault();
+  closeModal("itemModal");
+  form.reset();
+  renderAll();
+  toast("บันทึกแบบเข้ารหัสแล้ว", item.name);
+});
+
+$("#requestForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const existing = requests.find((request) => request.id === form.elements.id.value);
+  const data = {
+    name: form.elements.name.value.trim(),
+    email: form.elements.email.value.trim(),
+    system: form.elements.system.value.trim(),
+    reason: form.elements.reason.value.trim(),
+    status: form.elements.status.value,
+    urgent: form.elements.urgent.checked,
+  };
+  if (existing) Object.assign(existing, data);
+  else requests.unshift({ id: crypto.randomUUID(), ...data, date: todayIso(), source: "WEB" });
+  saveRequests();
+  closeModal("requestModal");
+  renderRequests();
+  renderDashboard();
+  toast("บันทึกคำขอแล้ว", data.system);
+});
+
+$("#deliverForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const request = requests.find((entry) => entry.id === form.elements.requestId.value);
+  const item = vault.items.find((entry) => entry.id === form.elements.itemId.value);
+  if (!request || !item) return;
+  if (item.reprompt && !await verifyMasterPassword("ยืนยัน Master Password ก่อนสร้างลิงก์แจกข้อมูล")) return;
+  const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
+  const pin = form.elements.pin.value;
+  const encryptedFragment = await createSharePayload({
+    title: item.name,
+    username: item.username,
+    password: item.password,
+    note: item.purpose || "",
+    recipient: request.name,
+    expiresAt,
+  }, pin);
+  const shareUrl = new URL("share.html", location.href);
+  shareUrl.hash = encryptedFragment;
+  const prefix = vault.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
+  const message = `${prefix}\nผู้รับ: ${request.name}\nระบบ: ${item.name}\nหมดอายุ: ${formatDateTime(expiresAt)}\nลิงก์: ${shareUrl.href}\n\nกรุณารับ Share PIN จากผู้ดูแลผ่านอีกช่องทาง`;
+  const channel = form.elements.channel.value;
+  if (channel === "lark") await sendLark(message);
+  else await navigator.clipboard.writeText(message);
+  const reference = await sha256Reference(shareUrl.href);
+  request.status = "delivered";
+  request.deliveredAt = nowIso();
+  request.deliveryMethod = "passly-share";
+  request.deliveryAudit = { itemId: item.id, channel, expiresAt, reference };
+  saveRequests();
+  addActivity("แจกข้อมูลจาก Vault", `${item.name} ให้ ${request.name} · ${channel} · ref ${reference}`, item.id);
+  await persistVault();
+  shareResult = { message, pin };
+  $("#shareMessage").value = message;
+  $("#sharePinResult").textContent = pin;
+  closeModal("deliverModal");
+  openModal("shareResultModal");
+  renderAll();
+  toast(channel === "lark" ? "ส่งลิงก์เข้า Lark แล้ว" : "คัดลอกลิงก์แล้ว", "แจ้ง PIN ให้ผู้รับผ่านอีกช่องทาง");
+});
+
+$("#collectionForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const existing = vault.collections.find((collection) => collection.id === form.elements.id.value);
+  const data = {
+    name: form.elements.name.value.trim(),
+    description: form.elements.description.value.trim(),
+    members: form.elements.members.value.trim(),
+    permission: form.elements.permission.value,
+    color: form.elements.color.value,
+  };
+  if (existing) Object.assign(existing, data);
+  else vault.collections.push({ id: crypto.randomUUID(), ...data });
+  addActivity(existing ? "แก้ไข Collection" : "สร้าง Collection", data.name);
+  await persistVault();
+  closeModal("collectionModal");
+  renderAll();
+  toast("บันทึก Collection แล้ว", data.name);
+});
+
+$("#memberForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const existing = vault.members.find((member) => member.id === form.elements.id.value);
+  const data = {
+    name: form.elements.name.value.trim(),
+    email: form.elements.email.value.trim(),
+    role: form.elements.role.value,
+    status: form.elements.status.value,
+    collectionIds: $$('input[name="collectionIds"]:checked', form).map((input) => input.value),
+  };
+  if (existing) Object.assign(existing, data);
+  else vault.members.push({ id: crypto.randomUUID(), ...data });
+  addActivity(existing ? "แก้ไขสมาชิก" : "เพิ่มสมาชิก", `${data.name} · ${data.role} · ${data.status}`);
+  await persistVault();
+  closeModal("memberModal");
+  renderAll();
+  toast("บันทึกสมาชิกแล้ว", data.name);
+});
+
+$("#groupForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const existing = vault.groups.find((group) => group.id === form.elements.id.value);
+  const data = {
+    name: form.elements.name.value.trim(),
+    members: form.elements.members.value.trim(),
+    collectionId: form.elements.collectionId.value,
+    permission: form.elements.permission.value,
+  };
+  if (existing) Object.assign(existing, data);
+  else vault.groups.push({ id: crypto.randomUUID(), ...data });
+  addActivity(existing ? "แก้ไขกลุ่ม" : "สร้างกลุ่ม", `${data.name} · ${data.permission}`);
+  await persistVault();
+  closeModal("groupModal");
+  renderAll();
+  toast("บันทึกกลุ่มแล้ว", data.name);
+});
+
+$("#changeMasterForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (form.elements.newPassword.value !== form.elements.confirmPassword.value) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
+  if (passwordScore(form.elements.newPassword.value) < 2) return toast("รหัสใหม่อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  const button = form.querySelector("button");
+  button.disabled = true;
+  button.textContent = "กำลังเข้ารหัสใหม่…";
+  try {
+    await unlockVaultEnvelope(getStoredEnvelope(), form.elements.currentPassword.value);
+    await saveQueue;
+    addActivity("เปลี่ยน Master Password", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
+    const result = await createVaultEnvelope(vault, form.elements.newPassword.value);
+    vaultKey = result.key;
+    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(result.envelope));
+    form.reset();
+    closeModal("changeMasterModal");
+    resetLockTimer();
+    toast("เปลี่ยน Master Password แล้ว", "Vault ถูกเข้ารหัสใหม่เรียบร้อย");
+  } catch {
+    toast("เปลี่ยนไม่สำเร็จ", "Master Password ปัจจุบันไม่ถูกต้อง");
+  } finally {
+    button.disabled = false;
+    button.textContent = "เข้ารหัส Vault ใหม่";
+  }
+});
+
+document.addEventListener("click", async (event) => {
+  const nav = event.target.closest("[data-view]");
+  if (nav) showView(nav.dataset.view);
+  const go = event.target.closest("[data-go-view]");
+  if (go) showView(go.dataset.goView);
+  if (event.target.closest("[data-open-item]")) openItemEditor();
+
+  const close = event.target.closest("[data-close-modal]");
+  if (close) closeModal(close.dataset.closeModal);
+
+  const viewItem = event.target.closest("[data-item-view]");
+  if (viewItem) await openItemDetail(viewItem.dataset.itemView);
+  const editItem = event.target.closest("[data-item-edit]");
+  if (editItem) {
+    closeModal("itemDetailModal");
+    openItemEditor(editItem.dataset.itemEdit);
+  }
+  const favoriteItem = event.target.closest("[data-item-favorite]");
+  if (favoriteItem) {
+    const item = vault.items.find((entry) => entry.id === favoriteItem.dataset.itemFavorite);
+    if (item) {
+      item.favorite = !item.favorite;
+      item.updatedAt = nowIso();
+      addActivity(item.favorite ? "เพิ่ม Favorite" : "นำออกจาก Favorite", item.name, item.id);
+      await persistVault();
+      renderAll();
+      if (!$("#itemDetailModal").hidden) await openItemDetail(item.id);
+    }
+  }
+  const trashItem = event.target.closest("[data-item-trash]");
+  if (trashItem) {
+    const item = vault.items.find((entry) => entry.id === trashItem.dataset.itemTrash);
+    if (item && confirm(`ย้าย “${item.name}” ไป Trash ใช่หรือไม่?`)) {
+      item.trashedAt = nowIso();
+      item.updatedAt = nowIso();
+      addActivity("ย้ายไป Trash", item.name, item.id);
+      await persistVault();
+      closeModal("itemDetailModal");
+      renderAll();
+    }
+  }
+  const restoreItem = event.target.closest("[data-item-restore]");
+  if (restoreItem) {
+    const item = vault.items.find((entry) => entry.id === restoreItem.dataset.itemRestore);
+    item.trashedAt = null;
+    item.updatedAt = nowIso();
+    addActivity("กู้คืนจาก Trash", item.name, item.id);
+    await persistVault();
+    renderAll();
+  }
+  const deleteForever = event.target.closest("[data-item-delete-forever]");
+  if (deleteForever) {
+    const item = vault.items.find((entry) => entry.id === deleteForever.dataset.itemDeleteForever);
+    if (item && confirm(`ลบ “${item.name}” ถาวรใช่หรือไม่?`)) {
+      vault.items = vault.items.filter((entry) => entry.id !== item.id);
+      addActivity("ลบรายการถาวร", item.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+
+  const approveRequest = event.target.closest("[data-request-approve]");
+  if (approveRequest) {
+    const request = requests.find((entry) => entry.id === approveRequest.dataset.requestApprove);
+    request.status = "approved";
+    saveRequests();
+    renderAll();
+    toast("อนุมัติคำขอแล้ว", "พร้อมเลือกข้อมูลจาก Vault");
+  }
+  const rejectRequest = event.target.closest("[data-request-reject]");
+  if (rejectRequest) {
+    const reason = prompt("เหตุผลที่ปฏิเสธคำขอ:");
+    if (reason === null) return;
+    const request = requests.find((entry) => entry.id === rejectRequest.dataset.requestReject);
+    request.status = "rejected";
+    request.rejectReason = reason;
+    saveRequests();
+    renderAll();
+  }
+  const shareRequest = event.target.closest("[data-request-share]");
+  if (shareRequest) await openDeliverForRequest(shareRequest.dataset.requestShare);
+  const editRequest = event.target.closest("[data-request-edit]");
+  if (editRequest) openRequestEditor(editRequest.dataset.requestEdit);
+  const deleteRequest = event.target.closest("[data-request-delete]");
+  if (deleteRequest && confirm("ลบคำขอนี้ใช่หรือไม่?")) {
+    requests = requests.filter((entry) => entry.id !== deleteRequest.dataset.requestDelete);
+    saveRequests();
+    renderAll();
+  }
+
+  const historyCopy = event.target.closest("[data-history-copy]");
+  if (historyCopy) {
+    const entry = vault.generatorHistory.find((item) => item.id === historyCopy.dataset.historyCopy);
+    if (entry) await copyText(entry.value);
+  }
+
+  const collectionEdit = event.target.closest("[data-collection-edit]");
+  if (collectionEdit) openCollectionEditor(collectionEdit.dataset.collectionEdit);
+  const collectionOpen = event.target.closest("[data-collection-open]");
+  if (collectionOpen) {
+    showView("vault");
+    $("#collectionFilter").value = collectionOpen.dataset.collectionOpen;
+    renderVault();
+  }
+  const collectionDelete = event.target.closest("[data-collection-delete]");
+  if (collectionDelete) {
+    const collection = vault.collections.find((entry) => entry.id === collectionDelete.dataset.collectionDelete);
+    if (collection && confirm(`ลบ Collection “${collection.name}” ใช่หรือไม่? รายการจะย้ายกลับ My Vault`)) {
+      vault.items.forEach((item) => { if (item.collectionId === collection.id) item.collectionId = ""; });
+      vault.collections = vault.collections.filter((entry) => entry.id !== collection.id);
+      addActivity("ลบ Collection", collection.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+  const folderRename = event.target.closest("[data-folder-rename]");
+  if (folderRename) {
+    const folder = vault.folders.find((entry) => entry.id === folderRename.dataset.folderRename);
+    const name = prompt("ชื่อ Folder ใหม่:", folder.name);
+    if (name?.trim()) {
+      folder.name = name.trim();
+      addActivity("เปลี่ยนชื่อ Folder", folder.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+  const folderDelete = event.target.closest("[data-folder-delete]");
+  if (folderDelete) {
+    const folder = vault.folders.find((entry) => entry.id === folderDelete.dataset.folderDelete);
+    if (folder && confirm(`ลบ Folder “${folder.name}” ใช่หรือไม่?`)) {
+      vault.items.forEach((item) => { if (item.folderId === folder.id) item.folderId = ""; });
+      vault.folders = vault.folders.filter((entry) => entry.id !== folder.id);
+      addActivity("ลบ Folder", folder.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+  const memberEdit = event.target.closest("[data-member-edit]");
+  if (memberEdit) openMemberEditor(memberEdit.dataset.memberEdit);
+  const memberToggle = event.target.closest("[data-member-toggle]");
+  if (memberToggle) {
+    const member = vault.members.find((entry) => entry.id === memberToggle.dataset.memberToggle);
+    if (member) {
+      member.status = member.status === "revoked" ? "confirmed" : "revoked";
+      addActivity(member.status === "revoked" ? "ระงับสมาชิก" : "คืนสิทธิ์สมาชิก", member.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+  const memberDelete = event.target.closest("[data-member-delete]");
+  if (memberDelete) {
+    const member = vault.members.find((entry) => entry.id === memberDelete.dataset.memberDelete);
+    const ownerCount = vault.members.filter((entry) => entry.role === "owner").length;
+    if (member?.role === "owner" && ownerCount <= 1) return toast("ลบ Owner คนสุดท้ายไม่ได้", "เปลี่ยนบทบาทหรือเพิ่ม Owner อีกคนก่อน");
+    if (member && confirm(`ลบสมาชิก “${member.name}” ใช่หรือไม่?`)) {
+      vault.members = vault.members.filter((entry) => entry.id !== member.id);
+      addActivity("ลบสมาชิก", member.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+  const groupEdit = event.target.closest("[data-group-edit]");
+  if (groupEdit) openGroupEditor(groupEdit.dataset.groupEdit);
+  const groupDelete = event.target.closest("[data-group-delete]");
+  if (groupDelete) {
+    const group = vault.groups.find((entry) => entry.id === groupDelete.dataset.groupDelete);
+    if (group && confirm(`ลบกลุ่ม “${group.name}” ใช่หรือไม่?`)) {
+      vault.groups = vault.groups.filter((entry) => entry.id !== group.id);
+      addActivity("ลบกลุ่ม", group.name);
+      await persistVault();
+      renderAll();
+    }
+  }
+
+  const detailCopy = event.target.closest("[data-detail-copy]");
+  if (detailCopy && detailItemId) {
+    const item = vault.items.find((entry) => entry.id === detailItemId);
+    if (item.reprompt && !await verifyMasterPassword()) return;
+    const value = item[detailCopy.dataset.detailCopy];
+    if (value) {
+      await copyText(value);
+      addActivity("คัดลอกข้อมูล", `${item.name} · ${detailCopy.dataset.detailCopy}`, item.id);
+      persistVault();
+    }
+  }
+  if (event.target.closest("[data-detail-toggle-password]") && detailItemId) {
+    const item = vault.items.find((entry) => entry.id === detailItemId);
+    const target = $("#detailPassword");
+    const hidden = target.textContent.includes("•");
+    target.textContent = hidden ? item.password : "••••••••••••";
+    event.target.textContent = hidden ? "ซ่อน" : "แสดง";
+  }
+  if (event.target.closest("[data-detail-toggle-card]") && detailItemId) {
+    const item = vault.items.find((entry) => entry.id === detailItemId);
+    const target = $("#detailCard");
+    const hidden = target.textContent.includes("•");
+    target.textContent = hidden ? item.cardNumber : `•••• •••• •••• ${(item.cardNumber || "").replace(/\s/g, "").slice(-4)}`;
+    event.target.textContent = hidden ? "ซ่อน" : "แสดง";
+  }
+  if (event.target.closest("[data-detail-launch]") && detailItemId) {
+    const item = vault.items.find((entry) => entry.id === detailItemId);
+    if (item.uri) window.open(item.uri, "_blank", "noopener,noreferrer");
+  }
+  if (event.target.closest("[data-detail-share]") && detailItemId) {
+    closeModal("itemDetailModal");
+    const item = vault.items.find((entry) => entry.id === detailItemId);
+    showView("requests");
+    toast("เลือกคำขอที่อนุมัติแล้ว", `เพื่อแจก ${item.name} จาก Vault`);
+  }
+});
+
+$("#newItemBtn").addEventListener("click", () => openItemEditor());
+$("#newRequestBtn").addEventListener("click", () => openRequestEditor());
+$("#menuBtn").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
+$("#lockVaultBtn").addEventListener("click", () => lockVault("ผู้ดูแลกดล็อก Vault"));
+$("#themeBtn").addEventListener("click", () => {
+  document.body.classList.toggle("dark");
+  localStorage.setItem(THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
+});
+
+$("#globalSearch").addEventListener("input", (event) => {
+  vaultSearch = event.target.value.trim();
+  if (vaultSearch && activeView !== "vault") showView("vault");
+  renderVault();
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    $("#globalSearch").focus();
+  }
+  if (event.key === "Escape") {
+    $$(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
+    document.body.style.overflow = "";
+  }
+});
+
+$("#vaultFilters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-vault-filter]");
+  if (!button) return;
+  vaultFilter = button.dataset.vaultFilter;
+  $$("[data-vault-filter]").forEach((entry) => entry.classList.toggle("active", entry === button));
+  renderVault();
+});
+["folderFilter", "collectionFilter", "vaultSort"].forEach((id) => $(`#${id}`).addEventListener("change", renderVault));
+$("#requestSearch").addEventListener("input", renderRequests);
+$("#requestStatusFilter").addEventListener("change", renderRequests);
+
+$("#toggleItemPassword").addEventListener("click", () => {
+  const input = $("#itemForm").elements.password;
+  input.type = input.type === "password" ? "text" : "password";
+  $("#toggleItemPassword").textContent = input.type === "password" ? "ดู" : "ซ่อน";
+});
+$("#generateItemPassword").addEventListener("click", () => {
+  const input = $("#itemForm").elements.password;
+  input.value = generatePassword({ length: 18 });
+  input.type = "text";
+  $("#toggleItemPassword").textContent = "ซ่อน";
+});
+
+$$("[data-generator-type]").forEach((button) => button.addEventListener("click", () => {
+  generatorType = button.dataset.generatorType;
+  $$("[data-generator-type]").forEach((entry) => entry.classList.toggle("active", entry === button));
+  $("#passwordOptions").hidden = generatorType !== "password";
+  $("#passphraseOptions").hidden = generatorType !== "passphrase";
+  updateGenerator();
+}));
+$("#passwordLength").addEventListener("input", () => { $("#lengthValue").textContent = $("#passwordLength").value; updateGenerator(); });
+$("#wordCount").addEventListener("input", () => { $("#wordCountValue").textContent = $("#wordCount").value; updateGenerator(); });
+["genUpper", "genLower", "genNumbers", "genSymbols", "genAmbiguous", "wordSeparator", "wordCapitalize", "wordNumber"].forEach((id) => $(`#${id}`).addEventListener("input", updateGenerator));
+$("#regenerate").addEventListener("click", updateGenerator);
+$("#copyGenerated").addEventListener("click", async () => { await copyText(generatedValue); await saveGeneratedHistory(); });
+$("#copyGeneratedPrimary").addEventListener("click", async () => { await copyText(generatedValue); await saveGeneratedHistory(); });
+$("#saveGenerated").addEventListener("click", async () => { await saveGeneratedHistory(); openItemEditor(null, { password: generatedValue, passwordUpdatedAt: todayIso() }); });
+$("#clearGeneratorHistory").addEventListener("click", async () => {
+  if (!confirm("ล้างประวัติรหัสที่สร้างทั้งหมดใช่หรือไม่?")) return;
+  vault.generatorHistory = [];
+  addActivity("ล้างประวัติ Generator", "ลบประวัติรหัสที่สร้าง");
+  await persistVault();
+  renderGeneratorHistory();
+});
+
+$("#newCollectionBtn").addEventListener("click", () => openCollectionEditor());
+$("#newMemberBtn").addEventListener("click", () => openMemberEditor());
+$("#newGroupBtn").addEventListener("click", () => openGroupEditor());
+$("#newFolderBtn").addEventListener("click", async () => {
+  const name = prompt("ชื่อ Folder ใหม่:");
+  if (!name?.trim()) return;
+  vault.folders.push({ id: crypto.randomUUID(), name: name.trim() });
+  addActivity("สร้าง Folder", name.trim());
+  await persistVault();
+  renderAll();
+});
+
+$("#importBtn").addEventListener("click", () => $("#credentialFileInput").click());
+$("#importQuickBtn").addEventListener("click", () => $("#credentialFileInput").click());
+$("#credentialFileInput").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    toast("กำลังนำเข้า", "ไฟล์ถูกอ่านในเบราว์เซอร์และจะเข้ารหัสก่อนบันทึก");
+    await importCredentialFile(file);
+  } catch (error) {
+    toast("นำเข้าไม่สำเร็จ", error.message);
+  }
+});
+
+$("#exportVaultBtn").addEventListener("click", async () => {
+  await saveQueue;
+  const envelope = getStoredEnvelope();
+  downloadFile(`passly-encrypted-backup-${todayIso()}.json`, JSON.stringify(envelope, null, 2));
+  addActivity("Export Backup", "ดาวน์โหลดไฟล์สำรองที่เข้ารหัส");
+  persistVault();
+  toast("ดาวน์โหลด Backup แล้ว", "ไฟล์ยังคงเข้ารหัสด้วย Master Password");
+});
+$("#importBackupBtn").addEventListener("click", () => $("#backupFileInput").click());
+$("#backupFileInput").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const envelope = JSON.parse(await file.text());
+    if (!envelope.salt || !envelope.iv || !envelope.data) throw new Error("ไม่ใช่ Passly encrypted backup");
+    if (!confirm("กู้คืน Backup นี้และแทนที่ Vault ปัจจุบันใช่หรือไม่?")) return;
+    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope));
+    lockVault("กรอก Master Password ของ Backup เพื่อเปิด Vault");
+  } catch (error) {
+    toast("กู้คืนไม่สำเร็จ", error.message);
+  }
+});
+
+$("#exportActivityBtn").addEventListener("click", () => {
+  const rows = [["Date", "Action", "Detail"], ...vault.activity.map((entry) => [entry.at, entry.action, entry.detail])];
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  downloadFile(`passly-activity-${todayIso()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
+});
+
+$("#lockTimeout").addEventListener("change", async (event) => {
+  vault.settings.lockTimeout = Number(event.target.value);
+  addActivity("เปลี่ยน Auto-lock", `${event.target.value} นาที`);
+  await persistVault();
+  resetLockTimer();
+  toast("บันทึก Auto-lock แล้ว", `${event.target.value} นาที`);
+});
+$("#saveLarkBtn").addEventListener("click", async () => {
+  vault.settings.larkWebhook = $("#larkWebhook").value.trim();
+  vault.settings.larkPrefix = $("#larkPrefix").value.trim() || "[Passly] ข้อมูลเข้าใช้งาน";
+  addActivity("บันทึก Lark Settings", vault.settings.larkWebhook ? "Webhook ถูกเก็บใน Vault แบบเข้ารหัส" : "ใช้ Webhook จาก Server");
+  await persistVault();
+  toast("บันทึก Lark แล้ว", "ค่าถูกเข้ารหัสรวมกับ Vault");
+});
+$("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterModal"));
+
+function resetVaultStorage() {
+  const confirmation = prompt("การลบไม่สามารถย้อนกลับได้ พิมพ์ DELETE เพื่อยืนยัน:");
+  if (confirmation !== "DELETE") return;
+  localStorage.removeItem(VAULT_STORAGE_KEY);
+  vault = null;
+  vaultKey = null;
+  location.reload();
+}
+$("#resetVaultBtn").addEventListener("click", resetVaultStorage);
+$("#resetFromLock").addEventListener("click", resetVaultStorage);
+
+$("#regenerateSharePin").addEventListener("click", () => { $("#deliverForm").elements.pin.value = generateSharePin(); });
+$("#copyShareMessage").addEventListener("click", () => shareResult && copyText(shareResult.message, "คัดลอกข้อความแล้ว"));
+$("#copySharePin").addEventListener("click", () => shareResult && copyText(shareResult.pin, "คัดลอก PIN แล้ว"));
+$("#refreshSecurity").addEventListener("click", () => { renderSecurity(); toast("สแกน Vault แล้ว", "การตรวจสอบทำบนอุปกรณ์นี้"); });
+
+$("#enableNotifications").addEventListener("click", async () => {
+  if (!("Notification" in window)) return toast("ไม่รองรับ", "เบราว์เซอร์นี้ไม่รองรับ Desktop Notification");
+  const permission = await Notification.requestPermission();
+  toast(permission === "granted" ? "เปิดแจ้งเตือนแล้ว" : "ยังไม่ได้รับอนุญาต", permission === "granted" ? "คำขอใหม่จะแจ้งบนหน้าจอ" : "เปิดได้ภายหลังจากการตั้งค่าเบราว์เซอร์");
+});
+
+["pointerdown", "keydown", "touchstart"].forEach((eventName) => document.addEventListener(eventName, () => {
+  if (vault) resetLockTimer();
+}, { passive: true }));
+
+$("#today").textContent = new Intl.DateTimeFormat("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+if (localStorage.getItem(THEME_KEY) === "dark") document.body.classList.add("dark");
+const initialHash = location.hash.slice(1);
+if (pageTitles[initialHash]) activeView = initialHash;
+updateGenerator();
+setLockScreenMode();

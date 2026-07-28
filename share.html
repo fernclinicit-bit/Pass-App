@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#142018" />
+  <title>Passly Secure Share</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="share-page">
+  <main class="share-shell">
+    <div class="share-brand"><span class="brand-mark"><i></i><i></i><i></i></span><strong>passly</strong><span>secure share</span></div>
+    <section class="share-card" id="shareUnlock">
+      <div class="share-lock">⌁</div>
+      <p class="eyebrow">Encrypted credential</p>
+      <h1>ข้อมูลถูกล็อกไว้</h1>
+      <p>กรอก PIN ที่ได้รับจากผู้ดูแลผ่านอีกช่องทางหนึ่ง ข้อมูลจะถอดรหัสบนอุปกรณ์นี้เท่านั้น</p>
+      <form id="shareUnlockForm">
+        <label>Share PIN<input name="pin" type="password" inputmode="text" autocomplete="one-time-code" required minlength="6" autofocus /></label>
+        <button class="primary-btn full" type="submit">เปิดข้อมูลอย่างปลอดภัย</button>
+      </form>
+      <small id="shareExpiry"></small>
+    </section>
+    <section class="share-card credential-card" id="shareContent" hidden>
+      <div class="credential-heading">
+        <div class="vault-item-icon login">⌁</div>
+        <div><p class="eyebrow">Passly credential</p><h1 id="shareTitle"></h1><span id="shareRecipient"></span></div>
+      </div>
+      <div class="share-field"><span>Username</span><strong id="shareUsername">—</strong><button data-copy-share="username">คัดลอก</button></div>
+      <div class="share-field"><span>Password</span><strong id="sharePassword">••••••••••••</strong><div><button id="toggleSharePassword">แสดง</button><button data-copy-share="password">คัดลอก</button></div></div>
+      <p class="share-note" id="shareNote" hidden></p>
+      <div class="share-warning">ลิงก์นี้หมดอายุตามเวลาที่ผู้ดูแลกำหนด ห้ามส่งต่อหรือบันทึกภาพหน้าจอ</div>
+      <button class="secondary-btn full" id="closeShare">ปิดและล้างข้อมูล</button>
+    </section>
+    <p class="share-error" id="shareError" hidden></p>
+  </main>
+  <script type="module" src="share.js"></script>
+</body>
+</html>

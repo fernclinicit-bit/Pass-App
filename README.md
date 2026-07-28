@@ -1,92 +1,93 @@
-# Passly
+# Passly Vault
 
-ระบบรับคำขอ Password จาก LINE Official Account และแจ้งเตือนผู้ดูแลบนเว็บ
+Password Manager และระบบบริหารคำขอรหัสผ่านสำหรับ Fern Clinic
 
-## การทำงาน
+## ฟังก์ชันหลัก
 
-1. ผู้ใช้ส่งข้อความหา LINE OA เช่น:
+- Vault สำหรับ Login, Secure Note, Card และ Identity
+- เข้ารหัสข้อมูลด้วย AES-GCM 256-bit
+- สร้างกุญแจจาก Master Password ด้วย PBKDF2-SHA256 600,000 รอบ
+- Folder, Favorites, Collections และ Trash
+- รายชื่อสมาชิก กลุ่ม บทบาท และการกำหนด Collection
+- Password / Passphrase Generator
+- รายงานรหัสอ่อน รหัสซ้ำ รหัสเก่า และข้อมูลไม่ครบ
+- Activity Log และ Encrypted Backup
+- นำเข้ารายการจาก `.xlsx`, `.csv` และ `.json` ภายในเบราว์เซอร์
+- รับคำขอจากกลุ่ม LINE และแจกข้อมูลจาก Vault
+- Passly Secure Share: ลิงก์เข้ารหัสที่ต้องใช้ PIN แยกช่องทาง
+- ส่งลิงก์ Passly Share เข้า Lark Chat
 
-   ```
-   ขอรหัส Google Workspace
-   เหตุผล: ใช้งานเอกสารของทีม Marketing
-   ```
+## รูปแบบการเก็บข้อมูล
 
-2. LINE Messaging API ส่ง webhook มาที่ `/api/line/webhook`
-3. หน้าเว็บดึงคำขอใหม่และแสดงการแจ้งเตือน
-4. ผู้ดูแลอนุมัติ แก้ไข ปฏิเสธ หรือส่ง Password ผ่าน Lark
+Vault ถูกเข้ารหัสและเก็บใน `localStorage` ของเบราว์เซอร์ผู้ดูแล ข้อมูลที่ไม่ได้
+เข้ารหัสและ Master Password จะไม่ถูกส่งไปยัง Server หรือ GitHub
+
+กุญแจถอดรหัสอยู่ในหน่วยความจำเฉพาะเวลาที่ Vault ปลดล็อก เมื่อกด Lock,
+ปิดหน้าเว็บ หรือครบเวลา Auto-lock ผู้ใช้ต้องกรอก Master Password ใหม่
+
+เวอร์ชันนี้เป็น Vault ต่ออุปกรณ์ ยังไม่ซิงก์ข้อมูลข้ามเครื่องและยังไม่มีระบบบัญชี
+ผู้ใช้ส่วนกลาง การใช้งานหลายผู้ดูแลควรเพิ่ม Authentication และฐานข้อมูลถาวรก่อน
+ใช้งานจริงในระดับองค์กร
+
+## นำเข้าจากไฟล์เดิม
+
+Passly รองรับ Workbook `User Pass` ที่มีคอลัมน์:
+
+- `User name`
+- `Pass Word`
+- `Password Last`
+- `Platform`
+- `วัตถุประสงค์การใช้งาน`
+- `Owner`
+- `อัปเดตรหัสล่าสุด`
+- `หมายเหตุ`
+- `ลิงค์`
+
+ไฟล์ถูกอ่านในเบราว์เซอร์และเข้ารหัสก่อนบันทึกลง Vault โดยระบบจะข้ามรายการซ้ำ
+ที่มี Platform, Username และ URL ตรงกัน
+
+## Passly Secure Share
+
+1. ผู้ดูแลอนุมัติคำขอ
+2. เลือก Login จาก Vault
+3. Passly เข้ารหัส Username และ Password ด้วย PIN แบบ PBKDF2 + AES-GCM
+4. Ciphertext อยู่ใน URL fragment และไม่ถูกส่งเป็นข้อมูลให้ Server
+5. ส่งลิงก์ผ่าน Lark หรือช่องทางส่วนตัว
+6. ส่ง PIN ให้ผู้รับผ่านอีกช่องทางหนึ่ง
+7. ผู้รับเปิด `share.html` และกรอก PIN เพื่อถอดรหัสบนอุปกรณ์
+
+วันหมดอายุของ Secure Share ถูกตรวจบนหน้าเว็บผู้รับ ลิงก์แบบไม่ใช้ฐานข้อมูล
+ไม่สามารถบังคับเปิดได้ครั้งเดียวหรือเพิกถอนย้อนหลังได้
 
 ## เริ่มใช้งาน
 
 ```powershell
-$env:LINE_CHANNEL_SECRET="your-channel-secret"
 npm start
 ```
 
-เปิด `http://localhost:3030`
+เปิด `http://localhost:3030` แล้วสร้าง Master Password ครั้งแรก
 
 ## Environment variables
 
-- `LINE_CHANNEL_SECRET` — Channel secret จาก LINE Developers Console
-- `LARK_WEBHOOK_URL` — Lark Custom Bot webhook (ถ้าใช้ส่ง Password ผ่าน Lark)
-- `PORT` — พอร์ตของเว็บ ค่าเริ่มต้น `3030`
+- `LINE_CHANNEL_SECRET` — ตรวจสอบลายเซ็น LINE webhook
+- `LINE_CHANNEL_ACCESS_TOKEN` — ส่งเมนูและข้อความตอบกลับใน LINE
+- `LINE_ALLOWED_GROUP_ID` — จำกัดเฉพาะกลุ่ม “บัญชี 1”
+- `LINE_GROUP_NAME` — ชื่อกลุ่มที่แสดงในระบบ
+- `LARK_WEBHOOK_URL` — Lark Custom Bot webhook ฝั่ง Server
+- `PORT` — ค่าเริ่มต้น `3030`
 - `DATA_DIR` — ที่เก็บคำขอจาก LINE ค่าเริ่มต้น `./data`
 
-ตั้งค่า Webhook URL ใน LINE Developers Console เป็น:
+LINE Webhook:
 
-```
+```text
 https://YOUR-DOMAIN/api/line/webhook
 ```
 
-ไฟล์ข้อมูลคำขอและค่า secret ถูกตัดออกจาก Git ผ่าน `.gitignore`
-
-## ใช้งานในกลุ่ม LINE “บัญชี 1”
-
-1. เปิด `Allow bot to join group chats` ใน LINE Developers Console
-2. เชิญ LINE Official Account เข้ากลุ่ม “บัญชี 1”
-3. เมื่อบอตเข้ากลุ่ม บอตจะส่งปุ่ม Quick Reply สำหรับเลือกระบบ
-4. หากปุ่มหาย ให้สมาชิกพิมพ์ `เมนู` หรือ `ขอรหัส`
-5. เมื่อสมาชิกกดชื่อระบบ คำขอจะขึ้นหน้าเว็บและบอตตอบยืนยันในกลุ่ม
-
-กำหนด Environment variables:
-
-- `LINE_CHANNEL_SECRET` — ตรวจสอบว่า webhook มาจาก LINE จริง
-- `LINE_CHANNEL_ACCESS_TOKEN` — ใช้ส่งเมนูและข้อความตอบกลับ
-- `LINE_ALLOWED_GROUP_ID` — จำกัดให้รับเฉพาะกลุ่ม “บัญชี 1”
-- `LINE_GROUP_NAME` — ชื่อกลุ่มที่แสดงบนเว็บ
-
-## การแจก Password ด้วย Bitwarden Send
-
-Passly ไม่เก็บ Password จริงและไม่เชื่อมต่อ Bitwarden API โดยตรง ผู้ดูแลใช้ขั้นตอนนี้:
-
-1. ตรวจและอนุมัติคำขอใน Passly
-2. เปิด Bitwarden Web Vault แล้วสร้าง `Send > New > Text`
-3. เปิด `Hide text by default` ตั้ง Expiration, Deletion date, Maximum access count
-   และ Password protection หรือ Email verification ตามระดับความสำคัญ
-4. คัดลอกลิงก์ Send กลับมาที่ Passly แล้วเลือกคัดลอกข้อความหรือส่งเข้า Lark
-5. Passly เก็บเฉพาะเวลา ช่องทาง วันหมดอายุ จำนวนครั้ง และค่าอ้างอิงแบบ hash
-   โดยไม่เก็บ Password หรือลิงก์ Send เต็ม
-
-สำหรับสิทธิ์ใช้งานระยะยาว ให้เก็บรายการใน Bitwarden Organization และแบ่ง
-Collections ตามฝ่ายหรือระบบ ส่วน Send ใช้สำหรับการแจกข้อมูลแบบชั่วคราวรายคำขอ
-
-คู่มือทางการ:
-
-- https://bitwarden.com/help/getting-started-webvault/
-- https://bitwarden.com/help/about-organizations/
-- https://bitwarden.com/help/create-send/
-- https://bitwarden.com/help/about-send/
-
 ## Deploy บน Render
 
-โปรเจกต์มี `render.yaml` สำหรับสร้าง Web Service:
+Repository มี `render.yaml` สำหรับ Render Web Service และใช้ `npm start`
+เป็นคำสั่งเริ่มระบบ ตั้งค่า Environment variables บน Render โดยไม่บันทึก
+ค่ารหัสลง GitHub
 
-1. เปิด Render Blueprint จาก repository นี้
-2. เมื่อ deploy สำเร็จ เพิ่ม `LINE_CHANNEL_SECRET` และ `LARK_WEBHOOK_URL`
-   ในหน้า Environment ของบริการ
-3. ตั้งค่า LINE Webhook URL เป็น
-   `https://YOUR-SERVICE.onrender.com/api/line/webhook`
-
-เมื่อยังไม่ได้ตั้ง `LINE_CHANNEL_SECRET` ระบบ production จะปฏิเสธ LINE webhook
-เพื่อป้องกันคำขอปลอม แต่หน้าเว็บยังเปิดใช้งานได้ตามปกติ
-
-> แผน Free เก็บไฟล์คำขอใน filesystem ชั่วคราว ข้อมูลอาจถูกล้างเมื่อ service restart หรือ deploy ใหม่
+> Render Free ใช้ filesystem ชั่วคราว คำขอจาก LINE อาจถูกล้างเมื่อ service
+> restart หรือ deploy ใหม่ ส่วน Vault ในเบราว์เซอร์จะไม่ถูกล้างตาม Server

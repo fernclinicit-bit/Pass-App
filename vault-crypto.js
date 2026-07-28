@@ -1,0 +1,218 @@
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export const VAULT_STORAGE_KEY = "passly-encrypted-vault-v1";
+export const VAULT_VERSION = 1;
+export const KDF_ITERATIONS = 600_000;
+export const SHARE_KDF_ITERATIONS = 250_000;
+
+export function bytesToBase64(bytes) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+export function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+export function bytesToBase64Url(bytes) {
+  return bytesToBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+export function base64UrlToBytes(value) {
+  const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return base64ToBytes(padded);
+}
+
+export function randomBytes(length) {
+  return crypto.getRandomValues(new Uint8Array(length));
+}
+
+export async function deriveVaultKey(masterPassword, salt, iterations = KDF_ITERATIONS) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(masterPassword),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+export async function encryptVault(vault, key, envelope = {}) {
+  const iv = randomBytes(12);
+  const payload = encoder.encode(JSON.stringify(vault));
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, payload);
+  return {
+    version: VAULT_VERSION,
+    algorithm: "AES-GCM-256",
+    kdf: "PBKDF2-SHA256",
+    iterations: envelope.iterations ?? KDF_ITERATIONS,
+    salt: envelope.salt,
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted)),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function decryptVault(envelope, key) {
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(envelope.iv) },
+    key,
+    base64ToBytes(envelope.data),
+  );
+  return JSON.parse(decoder.decode(decrypted));
+}
+
+export async function createVaultEnvelope(vault, masterPassword) {
+  const salt = randomBytes(16);
+  const key = await deriveVaultKey(masterPassword, salt);
+  const envelope = await encryptVault(vault, key, {
+    salt: bytesToBase64(salt),
+    iterations: KDF_ITERATIONS,
+  });
+  return { key, envelope };
+}
+
+export async function unlockVaultEnvelope(envelope, masterPassword) {
+  const key = await deriveVaultKey(
+    masterPassword,
+    base64ToBytes(envelope.salt),
+    envelope.iterations ?? KDF_ITERATIONS,
+  );
+  const vault = await decryptVault(envelope, key);
+  return { key, vault };
+}
+
+function secureRandomIndex(max) {
+  if (max <= 0) throw new Error("Invalid random range");
+  const limit = Math.floor(0x100000000 / max) * max;
+  const random = new Uint32Array(1);
+  do crypto.getRandomValues(random); while (random[0] >= limit);
+  return random[0] % max;
+}
+
+export function shuffleSecure(values) {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapWith = secureRandomIndex(index + 1);
+    [result[index], result[swapWith]] = [result[swapWith], result[index]];
+  }
+  return result;
+}
+
+export function generatePassword(options = {}) {
+  const {
+    length = 18,
+    uppercase = true,
+    lowercase = true,
+    numbers = true,
+    symbols = true,
+    avoidAmbiguous = true,
+  } = options;
+  const sets = [];
+  if (uppercase) sets.push(avoidAmbiguous ? "ABCDEFGHJKLMNPQRSTUVWXYZ" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  if (lowercase) sets.push(avoidAmbiguous ? "abcdefghijkmnopqrstuvwxyz" : "abcdefghijklmnopqrstuvwxyz");
+  if (numbers) sets.push(avoidAmbiguous ? "23456789" : "0123456789");
+  if (symbols) sets.push("!@#$%^&*()-_=+");
+  if (!sets.length) throw new Error("เลือกชนิดตัวอักษรอย่างน้อย 1 รายการ");
+  const pool = sets.join("");
+  const required = sets.map((set) => set[secureRandomIndex(set.length)]);
+  while (required.length < Math.max(length, sets.length)) {
+    required.push(pool[secureRandomIndex(pool.length)]);
+  }
+  return shuffleSecure(required).slice(0, length).join("");
+}
+
+const PASSPHRASE_WORDS = [
+  "amber", "apple", "atlas", "bamboo", "beacon", "berry", "breeze", "cedar",
+  "cloud", "coral", "dawn", "delta", "ember", "falcon", "fern", "forest",
+  "galaxy", "garden", "harbor", "hazel", "island", "jade", "jasmine", "lagoon",
+  "lotus", "lunar", "maple", "meadow", "mint", "nebula", "ocean", "olive",
+  "orchid", "pearl", "pine", "planet", "plum", "quartz", "rain", "river",
+  "rose", "saffron", "silver", "sky", "solar", "spruce", "star", "stone",
+  "sunset", "tiger", "tulip", "valley", "velvet", "violet", "willow", "zenith",
+];
+
+export function generatePassphrase(options = {}) {
+  const { words = 5, separator = "-", capitalize = false, includeNumber = true } = options;
+  const selected = [];
+  for (let index = 0; index < words; index += 1) {
+    let word = PASSPHRASE_WORDS[secureRandomIndex(PASSPHRASE_WORDS.length)];
+    if (capitalize) word = `${word[0].toUpperCase()}${word.slice(1)}`;
+    selected.push(word);
+  }
+  if (includeNumber) {
+    const target = secureRandomIndex(selected.length);
+    selected[target] = `${selected[target]}${secureRandomIndex(90) + 10}`;
+  }
+  return selected.join(separator || "-");
+}
+
+export function passwordScore(password = "") {
+  if (!password) return 0;
+  let pool = 0;
+  if (/[a-z]/.test(password)) pool += 26;
+  if (/[A-Z]/.test(password)) pool += 26;
+  if (/\d/.test(password)) pool += 10;
+  if (/[^A-Za-z0-9]/.test(password)) pool += 32;
+  const entropy = password.length * Math.log2(Math.max(pool, 1));
+  const common = /password|123456|qwerty|admin|welcome|letmein|passw0rd/i.test(password);
+  if (common) return 0;
+  if (entropy >= 90 && password.length >= 14) return 4;
+  if (entropy >= 65 && password.length >= 12) return 3;
+  if (entropy >= 45 && password.length >= 10) return 2;
+  return 1;
+}
+
+export async function sha256Reference(value, bytes = 6) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return [...new Uint8Array(digest).slice(0, bytes)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function createSharePayload(data, pin) {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const key = await deriveVaultKey(pin, salt, SHARE_KDF_ITERATIONS);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(JSON.stringify(data)),
+  );
+  const payload = {
+    v: 1,
+    kdf: SHARE_KDF_ITERATIONS,
+    s: bytesToBase64Url(salt),
+    i: bytesToBase64Url(iv),
+    d: bytesToBase64Url(new Uint8Array(encrypted)),
+    e: data.expiresAt,
+  };
+  return bytesToBase64Url(encoder.encode(JSON.stringify(payload)));
+}
+
+export async function openSharePayload(fragment, pin) {
+  const payload = JSON.parse(decoder.decode(base64UrlToBytes(fragment)));
+  if (payload.v !== 1) throw new Error("ลิงก์นี้ใช้รูปแบบที่ไม่รองรับ");
+  if (new Date(payload.e) <= new Date()) throw new Error("ลิงก์นี้หมดอายุแล้ว");
+  const key = await deriveVaultKey(pin, base64UrlToBytes(payload.s), payload.kdf);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64UrlToBytes(payload.i) },
+    key,
+    base64UrlToBytes(payload.d),
+  );
+  const data = JSON.parse(decoder.decode(decrypted));
+  if (new Date(data.expiresAt) <= new Date()) throw new Error("ลิงก์นี้หมดอายุแล้ว");
+  return data;
+}

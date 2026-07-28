@@ -5,7 +5,7 @@
   "description": "Password request workflow from LINE to a web admin dashboard",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check app.js"
+    "check": "node --check server.js && node --check app.js && node --check vault-crypto.js && node --check xlsx-reader.js && node --check share.js"
   },
   "engines": {
     "node": ">=18"
