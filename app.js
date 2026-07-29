@@ -2,13 +2,20 @@ import {
   VAULT_STORAGE_KEY,
   createSharePayload,
   createVaultEnvelope,
-  encryptVault,
   generatePassphrase,
   generatePassword,
   passwordScore,
   sha256Reference,
-  unlockVaultEnvelope,
 } from "./vault-crypto.js";
+import {
+  VAULT_BACKUP_STORAGE_KEY,
+  commitVaultEnvelope,
+  isVaultEnvelope,
+  queueVaultSave,
+  readVaultEnvelope,
+  removeStoredVault,
+  unlockStoredVault,
+} from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
 
 const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
@@ -17,6 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const nowIso = () => new Date().toISOString();
 const todayIso = () => nowIso().slice(0, 10);
+const normalizeMasterPassword = (value) => value.normalize("NFKC");
 const typeMeta = {
   login: { label: "Login", icon: "⌁" },
   note: { label: "Secure Note", icon: "▤" },
@@ -56,6 +64,7 @@ let lockDeadline = null;
 let countdownTimer = null;
 let lineInterval = null;
 let linePollReady = false;
+let lockInProgress = false;
 let requests = loadRequests();
 
 function escapeHtml(value = "") {
@@ -121,11 +130,7 @@ async function copyText(value, title = "คัดลอกแล้ว") {
 }
 
 function getStoredEnvelope() {
-  try {
-    return JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || "null");
-  } catch {
-    return null;
-  }
+  return readVaultEnvelope(localStorage);
 }
 
 function createEmptyVault() {
@@ -176,13 +181,18 @@ function migrateVaultData(data) {
 }
 
 async function persistVault() {
-  if (!vault || !vaultKey) return;
-  const snapshot = structuredClone(vault);
-  saveQueue = saveQueue.then(async () => {
-    const envelope = getStoredEnvelope();
-    if (!envelope) throw new Error("ไม่พบโครงสร้าง Vault");
-    const next = await encryptVault(snapshot, vaultKey, envelope);
-    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(next));
+  if (!vault || !vaultKey) return saveQueue;
+  const envelopeForSave = getStoredEnvelope();
+  if (!envelopeForSave) throw new Error("ไม่พบโครงสร้าง Vault");
+
+  saveQueue = queueVaultSave(saveQueue, {
+    storage: localStorage,
+    vault,
+    key: vaultKey,
+    envelope: envelopeForSave,
+    onPreviousError: (error) => {
+      console.error("Previous vault save failed; retrying with the latest snapshot.", error);
+    },
   });
   return saveQueue;
 }
@@ -263,7 +273,10 @@ function getSecurityReport() {
 }
 
 function setLockScreenMode() {
-  const exists = Boolean(getStoredEnvelope());
+  const exists = Boolean(
+    getStoredEnvelope()
+    || readVaultEnvelope(localStorage, VAULT_BACKUP_STORAGE_KEY),
+  );
   $("#setupPanel").hidden = exists;
   $("#unlockPanel").hidden = !exists;
   $("#lockScreen").hidden = false;
@@ -272,31 +285,48 @@ function setLockScreenMode() {
   setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
 }
 
-function lockVault(reason = "ล็อก Vault แล้ว") {
-  vault = null;
-  vaultKey = null;
-  detailItemId = null;
-  shareResult = null;
+async function lockVault(reason = "ล็อก Vault แล้ว", { save = true } = {}) {
+  if (lockInProgress) return;
+  lockInProgress = true;
   clearTimeout(lockTimer);
   clearInterval(countdownTimer);
   clearInterval(lineInterval);
   lockTimer = null;
   countdownTimer = null;
   lineInterval = null;
-  $$(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
-  document.body.style.overflow = "";
-  setLockScreenMode();
-  $("#unlockError").hidden = true;
-  if (reason) toast("Vault ถูกล็อก", reason);
+  lockDeadline = null;
+
+  try {
+    if (save && vault && vaultKey) await persistVault();
+  } catch (error) {
+    console.error("Unable to finish the final vault save before locking.", error);
+  } finally {
+    vault = null;
+    vaultKey = null;
+    detailItemId = null;
+    shareResult = null;
+    $$(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
+    document.body.style.overflow = "";
+    setLockScreenMode();
+    $("#unlockError").hidden = true;
+    lockInProgress = false;
+    if (reason) toast("Vault ถูกล็อก", reason);
+  }
 }
 
-function resetLockTimer() {
-  if (!vault) return;
+function armLockTimer() {
+  if (!vault || !lockDeadline) return;
   clearTimeout(lockTimer);
   clearInterval(countdownTimer);
-  const minutes = Number(vault.settings.lockTimeout || 5);
-  lockDeadline = Date.now() + minutes * 60_000;
-  lockTimer = setTimeout(() => lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด"), minutes * 60_000);
+  const remainingMs = lockDeadline - Date.now();
+  if (remainingMs <= 0) {
+    lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด");
+    return;
+  }
+  lockTimer = setTimeout(
+    () => lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด"),
+    remainingMs,
+  );
   const updateCountdown = () => {
     const remaining = Math.max(0, Math.ceil((lockDeadline - Date.now()) / 60_000));
     $("#autoLockText").textContent = `ล็อกอัตโนมัติใน ${remaining} นาที`;
@@ -305,7 +335,15 @@ function resetLockTimer() {
   countdownTimer = setInterval(updateCountdown, 30_000);
 }
 
+function resetLockTimer() {
+  if (!vault) return;
+  const minutes = Number(vault.settings.lockTimeout || 5);
+  lockDeadline = Date.now() + minutes * 60_000;
+  armLockTimer();
+}
+
 function afterUnlock() {
+  lockInProgress = false;
   $("#lockScreen").hidden = true;
   $("#mainApp").hidden = false;
   document.body.classList.add("vault-open");
@@ -598,7 +636,7 @@ async function verifyMasterPassword(message = "ยืนยัน Master Passwor
   const password = prompt(message);
   if (password === null) return false;
   try {
-    await unlockVaultEnvelope(getStoredEnvelope(), password);
+    await unlockStoredVault(localStorage, password);
     return true;
   } catch {
     toast("ยืนยันไม่สำเร็จ", "Master Password ไม่ถูกต้อง");
@@ -876,8 +914,13 @@ $("#setupForm").addEventListener("input", (event) => {
 $("#setupForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  if (form.elements.password.value !== form.elements.confirmPassword.value) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
+  if (
+    normalizeMasterPassword(form.elements.password.value)
+    !== normalizeMasterPassword(form.elements.confirmPassword.value)
+  ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
   if (passwordScore(form.elements.password.value) < 2) return toast("Master Password อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  if (lockInProgress) return;
+  lockInProgress = true;
   const button = form.querySelector("button[type=submit]");
   button.disabled = true;
   button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
@@ -885,14 +928,20 @@ $("#setupForm").addEventListener("submit", async (event) => {
     vault = createEmptyVault();
     const result = await createVaultEnvelope(vault, form.elements.password.value);
     vaultKey = result.key;
-    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(result.envelope));
+    commitVaultEnvelope(localStorage, result.envelope, {
+      preserveCurrentAsBackup: false,
+      clearBackup: true,
+    });
     localStorage.removeItem("passly-lark");
     form.reset();
     afterUnlock();
     toast("สร้าง Passly Vault แล้ว", "ข้อมูลพร้อมบันทึกแบบเข้ารหัส");
   } catch (error) {
+    vault = null;
+    vaultKey = null;
     toast("สร้าง Vault ไม่สำเร็จ", error.message);
   } finally {
+    lockInProgress = false;
     button.disabled = false;
     button.innerHTML = 'สร้าง Vault ที่เข้ารหัส <span>→</span>';
   }
@@ -905,13 +954,22 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   button.textContent = "กำลังถอดรหัส…";
   $("#unlockError").hidden = true;
   try {
-    const result = await unlockVaultEnvelope(getStoredEnvelope(), event.currentTarget.elements.password.value);
+    const result = await unlockStoredVault(
+      localStorage,
+      event.currentTarget.elements.password.value,
+    );
     vaultKey = result.key;
     vault = migrateVaultData(result.vault);
     event.currentTarget.reset();
     afterUnlock();
+    if (result.recovered) {
+      toast(
+        "กู้คืน Vault สำเร็จ",
+        "ระบบใช้ Snapshot สำรองก่อน Sleep และซ่อมข้อมูลที่บันทึกล่าสุดให้แล้ว",
+      );
+    }
   } catch {
-    $("#unlockError").textContent = "Master Password ไม่ถูกต้อง หรือ Vault เสียหาย";
+    $("#unlockError").textContent = "Master Password ไม่ถูกต้อง โปรดตรวจภาษาแป้นพิมพ์และ Caps Lock";
     $("#unlockError").hidden = false;
   } finally {
     button.disabled = false;
@@ -1095,25 +1153,36 @@ $("#groupForm").addEventListener("submit", async (event) => {
 $("#changeMasterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  if (form.elements.newPassword.value !== form.elements.confirmPassword.value) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
+  if (
+    normalizeMasterPassword(form.elements.newPassword.value)
+    !== normalizeMasterPassword(form.elements.confirmPassword.value)
+  ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
   if (passwordScore(form.elements.newPassword.value) < 2) return toast("รหัสใหม่อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
+  if (lockInProgress) return;
+  lockInProgress = true;
+  clearTimeout(lockTimer);
+  clearInterval(countdownTimer);
   const button = form.querySelector("button");
   button.disabled = true;
   button.textContent = "กำลังเข้ารหัสใหม่…";
   try {
-    await unlockVaultEnvelope(getStoredEnvelope(), form.elements.currentPassword.value);
-    await saveQueue;
+    await unlockStoredVault(localStorage, form.elements.currentPassword.value);
+    await persistVault();
     addActivity("เปลี่ยน Master Password", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
     const result = await createVaultEnvelope(vault, form.elements.newPassword.value);
     vaultKey = result.key;
-    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(result.envelope));
+    commitVaultEnvelope(localStorage, result.envelope, {
+      preserveCurrentAsBackup: false,
+      clearBackup: true,
+    });
     form.reset();
     closeModal("changeMasterModal");
-    resetLockTimer();
     toast("เปลี่ยน Master Password แล้ว", "Vault ถูกเข้ารหัสใหม่เรียบร้อย");
   } catch {
     toast("เปลี่ยนไม่สำเร็จ", "Master Password ปัจจุบันไม่ถูกต้อง");
   } finally {
+    lockInProgress = false;
+    if (vault) resetLockTimer();
     button.disabled = false;
     button.textContent = "เข้ารหัส Vault ใหม่";
   }
@@ -1441,10 +1510,10 @@ $("#backupFileInput").addEventListener("change", async (event) => {
   if (!file) return;
   try {
     const envelope = JSON.parse(await file.text());
-    if (!envelope.salt || !envelope.iv || !envelope.data) throw new Error("ไม่ใช่ Passly encrypted backup");
+    if (!isVaultEnvelope(envelope)) throw new Error("ไม่ใช่ Passly encrypted backup");
     if (!confirm("กู้คืน Backup นี้และแทนที่ Vault ปัจจุบันใช่หรือไม่?")) return;
-    localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope));
-    lockVault("กรอก Master Password ของ Backup เพื่อเปิด Vault");
+    commitVaultEnvelope(localStorage, envelope);
+    lockVault("กรอก Master Password ของ Backup เพื่อเปิด Vault", { save: false });
   } catch (error) {
     toast("กู้คืนไม่สำเร็จ", error.message);
   }
@@ -1475,7 +1544,7 @@ $("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterMod
 function resetVaultStorage() {
   const confirmation = prompt("การลบไม่สามารถย้อนกลับได้ พิมพ์ DELETE เพื่อยืนยัน:");
   if (confirmation !== "DELETE") return;
-  localStorage.removeItem(VAULT_STORAGE_KEY);
+  removeStoredVault(localStorage);
   vault = null;
   vaultKey = null;
   location.reload();
@@ -1492,6 +1561,40 @@ $("#enableNotifications").addEventListener("click", async () => {
   if (!("Notification" in window)) return toast("ไม่รองรับ", "เบราว์เซอร์นี้ไม่รองรับ Desktop Notification");
   const permission = await Notification.requestPermission();
   toast(permission === "granted" ? "เปิดแจ้งเตือนแล้ว" : "ยังไม่ได้รับอนุญาต", permission === "granted" ? "คำขอใหม่จะแจ้งบนหน้าจอ" : "เปิดได้ภายหลังจากการตั้งค่าเบราว์เซอร์");
+});
+
+function persistBeforeSuspension() {
+  if (!vault || !vaultKey || lockInProgress) return;
+  persistVault().catch((error) => {
+    console.error("Unable to save the vault before suspension.", error);
+  });
+}
+
+function resumeVaultSession() {
+  if (!vault || lockInProgress) return;
+  if (lockDeadline && Date.now() >= lockDeadline) {
+    lockVault("ระบบถูกพักหรือไม่มีการใช้งานตามเวลาที่กำหนด");
+    return;
+  }
+  armLockTimer();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistBeforeSuspension();
+  else resumeVaultSession();
+});
+document.addEventListener("freeze", persistBeforeSuspension);
+document.addEventListener("resume", resumeVaultSession);
+window.addEventListener("pagehide", persistBeforeSuspension);
+window.addEventListener("pageshow", resumeVaultSession);
+window.addEventListener("storage", (event) => {
+  if (
+    vault
+    && (event.key === VAULT_STORAGE_KEY
+      || event.key === VAULT_BACKUP_STORAGE_KEY)
+  ) {
+    lockVault("Vault ถูกอัปเดตจากแท็บอื่น กรุณาปลดล็อกอีกครั้ง", { save: false });
+  }
 });
 
 ["pointerdown", "keydown", "touchstart"].forEach((eventName) => document.addEventListener(eventName, () => {
