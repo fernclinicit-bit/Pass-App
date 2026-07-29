@@ -5,6 +5,7 @@ export const VAULT_STORAGE_KEY = "passly-encrypted-vault-v1";
 export const VAULT_VERSION = 1;
 export const KDF_ITERATIONS = 600_000;
 export const SHARE_KDF_ITERATIONS = 250_000;
+export const MASTER_PASSWORD_NORMALIZATION = "NFKC";
 
 export function bytesToBase64(bytes) {
   let binary = "";
@@ -59,6 +60,7 @@ export async function encryptVault(vault, key, envelope = {}) {
     kdf: "PBKDF2-SHA256",
     iterations: envelope.iterations ?? KDF_ITERATIONS,
     salt: envelope.salt,
+    passwordNormalization: envelope.passwordNormalization,
     iv: bytesToBase64(iv),
     data: bytesToBase64(new Uint8Array(encrypted)),
     updatedAt: new Date().toISOString(),
@@ -76,17 +78,24 @@ export async function decryptVault(envelope, key) {
 
 export async function createVaultEnvelope(vault, masterPassword) {
   const salt = randomBytes(16);
-  const key = await deriveVaultKey(masterPassword, salt);
+  const key = await deriveVaultKey(
+    masterPassword.normalize(MASTER_PASSWORD_NORMALIZATION),
+    salt,
+  );
   const envelope = await encryptVault(vault, key, {
     salt: bytesToBase64(salt),
     iterations: KDF_ITERATIONS,
+    passwordNormalization: MASTER_PASSWORD_NORMALIZATION,
   });
   return { key, envelope };
 }
 
 export async function unlockVaultEnvelope(envelope, masterPassword) {
+  const normalizedPassword = envelope.passwordNormalization
+    ? masterPassword.normalize(envelope.passwordNormalization)
+    : masterPassword;
   const key = await deriveVaultKey(
-    masterPassword,
+    normalizedPassword,
     base64ToBytes(envelope.salt),
     envelope.iterations ?? KDF_ITERATIONS,
   );
