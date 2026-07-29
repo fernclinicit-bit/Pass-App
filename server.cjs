@@ -219,6 +219,68 @@ async function handleLineWebhook(req, res) {
   send(res, 200, JSON.stringify({ ok: true, received: incoming.length }));
 }
 
+async function handleLarkWebhook(req, res) {
+  const raw = await readBody(req);
+  const payload = JSON.parse(raw || '{}');
+
+  // URL Verification for Lark Event Subscriptions
+  if (payload.type === 'url_verification') {
+    return send(res, 200, JSON.stringify({ challenge: payload.challenge }));
+  }
+
+  if (payload.header?.event_type === 'im.message.receive_v1' && payload.event?.message?.message_type === 'text') {
+    try {
+      const contentObj = JSON.parse(payload.event.message.content || '{}');
+      const text = (contentObj.text || '').trim();
+      
+      const isRequest = /ขอ\s*(รหัส|password|pass)|password\s*request/i.test(text);
+      if (isRequest) {
+        const clean = text.replace(/ขอ\s*(รหัส|password|pass)\s*/i, '').replace(/password\s*request\s*/i, '').trim();
+        if (clean) {
+          const [system, ...reasonParts] = clean.split(/\n|เหตุผล\s*[:：]?/i);
+          const reason = reasonParts.join(' ').trim() || text;
+          const openId = payload.event.sender?.sender_id?.open_id || 'unknown';
+          const createTime = Number(payload.event.message.create_time) || Date.now();
+          
+          const item = {
+            id: `lark-${payload.header.event_id}`,
+            name: `Lark User ${String(openId).slice(-6)}`,
+            email: openId,
+            system: system || 'ไม่ระบุระบบ',
+            reason,
+            date: new Date(createTime).toISOString().slice(0, 10),
+            receivedAt: new Date(createTime).toISOString(),
+            status: 'pending',
+            urgent: false,
+            source: 'Lark',
+            larkUserId: openId,
+            larkChatId: payload.event.message.chat_id,
+          };
+          
+          const current = readRequests();
+          if (!current.some((saved) => saved.id === item.id)) {
+            current.unshift(item);
+            writeRequests(current);
+            
+            const webhookUrl = process.env.LARK_WEBHOOK_URL;
+            if (webhookUrl && /^https:\/\/open\.larksuite\.com\/open-apis\/bot\/v2\/hook\//.test(webhookUrl)) {
+              fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ msg_type: 'text', content: { text: `รับคำขอ ${item.system} แล้ว ✅\nผู้ดูแลจะตรวจสอบผ่านหน้าเว็บ` } })
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Lark parsing error:', e);
+    }
+  }
+
+  send(res, 200, JSON.stringify({ ok: true }));
+}
+
 async function handleLark(req, res) {
   const data = JSON.parse(await readBody(req) || '{}');
   const webhook = process.env.LARK_WEBHOOK_URL || data.webhook;
@@ -233,6 +295,7 @@ async function handleLark(req, res) {
   const result = await response.json();
   if (!response.ok || (result.code && result.code !== 0)) {
     throw new Error(result.msg || result.StatusMessage || 'Lark API error');
+
   }
   send(res, 200, JSON.stringify({ ok: true }));
 }
@@ -244,6 +307,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/requests') {
       return send(res, 200, JSON.stringify({ requests: readRequests() }));
+    }
+    if (req.method === 'POST' && req.url === '/api/lark/webhook') {
+      return await handleLarkWebhook(req, res);
     }
     if (req.method === 'POST' && req.url === '/api/lark') {
       return await handleLark(req, res);

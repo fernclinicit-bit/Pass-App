@@ -918,7 +918,6 @@ $("#setupForm").addEventListener("submit", async (event) => {
     normalizeMasterPassword(form.elements.password.value)
     !== normalizeMasterPassword(form.elements.confirmPassword.value)
   ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
-  if (passwordScore(form.elements.password.value) < 2) return toast("Master Password อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
   if (lockInProgress) return;
   lockInProgress = true;
   const button = form.querySelector("button[type=submit]");
@@ -1157,7 +1156,6 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
     normalizeMasterPassword(form.elements.newPassword.value)
     !== normalizeMasterPassword(form.elements.confirmPassword.value)
   ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
-  if (passwordScore(form.elements.newPassword.value) < 2) return toast("รหัสใหม่อ่อนเกินไป", "ใช้รหัสยาวและคาดเดายากกว่านี้");
   if (lockInProgress) return;
   lockInProgress = true;
   clearTimeout(lockTimer);
