@@ -39,6 +39,18 @@ async function waitForServer(url, child) {
   throw new Error("Passly server did not start in time");
 }
 
+test("delivery menu offers LINE by default without Lark", async () => {
+  const html = await fs.readFile(path.join(projectRoot, "index.html"), "utf8");
+  const app = await fs.readFile(path.join(projectRoot, "app.js"), "utf8");
+
+  assert.match(html, /name="channel" id="deliveryChannel"/);
+  assert.match(html, /option value="line" selected>ส่งเข้า LINE/);
+  assert.match(html, /option value="copy">คัดลอกข้อความ/);
+  assert.doesNotMatch(html, /ส่งลิงก์เข้า Lark/);
+  assert.match(app, /channel === "line"/);
+  assert.match(app, /sendLineDelivery/);
+});
+
 test("password requests are accepted from LINE only", async (context) => {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;

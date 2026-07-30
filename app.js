@@ -667,6 +667,14 @@ function generateSharePin() {
   return generatePassword({ length: 8, uppercase: true, lowercase: true, numbers: true, symbols: false, avoidAmbiguous: true });
 }
 
+function updateDeliverySubmitButton() {
+  const form = $("#deliverForm");
+  const button = form.querySelector('button[type="submit"]');
+  button.innerHTML = form.elements.channel.value === "line"
+    ? 'ส่งเข้า LINE <span>→</span>'
+    : 'คัดลอกข้อความ <span>→</span>';
+}
+
 async function openDeliverForRequest(requestId, presetItemId = null) {
   const request = requests.find((entry) => entry.id === requestId);
   const items = loginItems();
@@ -684,6 +692,7 @@ async function openDeliverForRequest(requestId, presetItemId = null) {
   const match = presetItemId || items.find((item) => item.name.toLowerCase().includes(request.system.toLowerCase()) || request.system.toLowerCase().includes(item.name.toLowerCase()))?.id;
   if (match) form.elements.itemId.value = match;
   form.elements.pin.value = generateSharePin();
+  updateDeliverySubmitButton();
   openModal("deliverModal");
 }
 
@@ -1024,8 +1033,9 @@ $("#deliverForm").addEventListener("submit", async (event) => {
   const item = vault.items.find((entry) => entry.id === form.elements.itemId.value);
   if (!request || !item) return;
   if (item.reprompt && !await verifyMasterPassword("ยืนยันรหัสผ่านก่อนสร้างลิงก์แจกข้อมูล")) return;
+  const channel = form.elements.channel.value;
   submitButton.disabled = true;
-  submitButton.textContent = "กำลังส่งเข้า LINE…";
+  submitButton.textContent = channel === "line" ? "กำลังส่งเข้า LINE…" : "กำลังคัดลอก…";
   try {
     const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
     const pin = form.elements.pin.value;
@@ -1042,34 +1052,46 @@ $("#deliverForm").addEventListener("submit", async (event) => {
     const prefix = vault.settings.sharePrefix || "[Passly] ข้อมูลเข้าใช้งาน";
     const message = `${prefix}\nผู้รับ: ${request.name}\nระบบ: ${item.name}\nหมดอายุ: ${formatDateTime(expiresAt)}\nลิงก์: ${shareUrl.href}`;
 
-    await sendLineDelivery({
-      requestId: request.id,
-      itemName: item.name,
-      expiresAt,
-      shareUrl: shareUrl.href,
-      pin,
-    });
+    if (channel === "line") {
+      await sendLineDelivery({
+        requestId: request.id,
+        itemName: item.name,
+        expiresAt,
+        shareUrl: shareUrl.href,
+        pin,
+      });
+    } else {
+      await navigator.clipboard.writeText(message);
+    }
 
     const reference = await sha256Reference(shareUrl.href);
     request.status = "delivered";
     request.deliveredAt = nowIso();
-    request.deliveryMethod = "line-secure-share";
-    request.deliveryAudit = { itemId: item.id, channel: "line", expiresAt, reference };
+    request.deliveryMethod = channel === "line" ? "line-secure-share" : "manual-copy";
+    request.deliveryAudit = { itemId: item.id, channel, expiresAt, reference };
     saveRequests();
-    addActivity("แจกข้อมูลจาก Vault", `${item.name} ให้ ${request.name} · LINE · ref ${reference}`, item.id);
+    addActivity("แจกข้อมูลจาก Vault", `${item.name} ให้ ${request.name} · ${channel === "line" ? "LINE" : "คัดลอก"} · ref ${reference}`, item.id);
     await persistVault();
     shareResult = { message, pin };
     $("#shareMessage").value = message;
     $("#sharePinResult").textContent = pin;
+    $("#shareResultEyebrow").textContent = channel === "line" ? "Sent to LINE" : "Share ready";
+    $("#shareResultTitle").textContent = channel === "line" ? "ส่งข้อมูลเข้า LINE แล้ว" : "คัดลอกข้อความแล้ว";
+    $("#shareResultCopy").textContent = channel === "line"
+      ? "ผู้รับจะได้รับลิงก์ Passly และ Share PIN เป็น 2 ข้อความในกลุ่มต้นทาง"
+      : "นำข้อความไปส่งให้ผู้รับ และกดคัดลอก Share PIN เพื่อส่งแยกอีกครั้ง";
     closeModal("deliverModal");
     openModal("shareResultModal");
     renderAll();
-    toast("ส่งเข้า LINE แล้ว", "ลิงก์เข้ารหัสและ Share PIN ถูกส่งเป็น 2 ข้อความ");
+    toast(
+      channel === "line" ? "ส่งเข้า LINE แล้ว" : "คัดลอกข้อความแล้ว",
+      channel === "line" ? "ลิงก์เข้ารหัสและ Share PIN ถูกส่งเป็น 2 ข้อความ" : "อย่าลืมส่ง Share PIN ให้ผู้รับ",
+    );
   } catch (error) {
-    toast("ส่งเข้า LINE ไม่สำเร็จ", error.message);
+    toast(channel === "line" ? "ส่งเข้า LINE ไม่สำเร็จ" : "คัดลอกไม่สำเร็จ", error.message);
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = 'ส่งเข้า LINE <span>→</span>';
+    updateDeliverySubmitButton();
   }
 });
 
@@ -1516,6 +1538,7 @@ $("#resetVaultBtn").addEventListener("click", resetVaultStorage);
 $("#resetFromLock").addEventListener("click", resetVaultStorage);
 
 $("#regenerateSharePin").addEventListener("click", () => { $("#deliverForm").elements.pin.value = generateSharePin(); });
+$("#deliveryChannel").addEventListener("change", updateDeliverySubmitButton);
 $("#copyShareMessage").addEventListener("click", () => shareResult && copyText(shareResult.message, "คัดลอกข้อความแล้ว"));
 $("#copySharePin").addEventListener("click", () => shareResult && copyText(shareResult.pin, "คัดลอก PIN แล้ว"));
 $("#refreshSecurity").addEventListener("click", () => { renderSecurity(); toast("สแกน Vault แล้ว", "การตรวจสอบทำบนอุปกรณ์นี้"); });
