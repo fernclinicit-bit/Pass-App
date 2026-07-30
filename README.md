@@ -16,6 +16,7 @@ Password Manager และระบบบริหารคำขอรหัส
 - รองรับ Master Password ที่มี Unicode/ภาษาไทยแบบคงรูปเดียวกัน
 - นำเข้ารายการจาก `.xlsx`, `.csv` และ `.json` ภายในเบราว์เซอร์
 - รับคำขอจากกลุ่ม LINE และแจกข้อมูลจาก Vault
+- ช่องทางรับคำขอใหม่มีเฉพาะ LINE กลุ่ม “บัญชี 1” ไม่รับ Event จาก Lark หรือหน้าเว็บ
 - Passly Secure Share: ลิงก์เข้ารหัสที่ต้องใช้ PIN แยกช่องทาง
 - ส่งลิงก์ Passly Share เข้า Lark Chat
 
@@ -94,6 +95,9 @@ LINE Webhook:
 ```text
 https://YOUR-DOMAIN/api/line/webhook
 ```
+
+Lark ใช้เป็นช่องทางส่งลิงก์หลังผู้ดูแลอนุมัติเท่านั้น Server ไม่เปิด
+Lark Event Subscription สำหรับรับคำขอ Password
 
 ## Deploy บน Render
 

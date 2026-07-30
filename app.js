@@ -495,7 +495,7 @@ function renderRequests() {
   $("#requestTableBody").innerHTML = filtered.map((request) => `
     <tr>
       <td><div class="user-cell"><span class="avatar">${escapeHtml(initials(request.name))}</span><div><strong>${escapeHtml(request.name)}${request.urgent ? '<em class="urgent-dot">ด่วน</em>' : ""}</strong><small>${escapeHtml(request.email)}</small></div></div></td>
-      <td><strong>${escapeHtml(request.system)}</strong><small class="vault-updated">${request.source === "LINE" ? "จาก LINE" : "บันทึกในเว็บ"}</small></td>
+      <td><strong>${escapeHtml(request.system)}</strong><small class="vault-updated">${request.source === "LINE" ? "จาก LINE" : "รายการเดิมก่อนใช้ LINE เท่านั้น"}</small></td>
       <td class="reason-cell">${escapeHtml(request.reason)}</td>
       <td>${formatDate(request.date)}</td>
       <td><span class="status ${request.status}">${requestLabels[request.status] || request.status}</span></td>
@@ -687,16 +687,21 @@ async function openItemDetail(itemId) {
 }
 
 function openRequestEditor(requestId = null) {
+  if (!requestId) {
+    toast("รับคำขอผ่าน LINE เท่านั้น", "ให้สมาชิกกดขอ Password จากเมนูในกลุ่ม LINE “บัญชี 1”");
+    return;
+  }
   const form = $("#requestForm");
   form.reset();
   const request = requestId ? requests.find((entry) => entry.id === requestId) : null;
+  if (!request) return;
   form.elements.id.value = request?.id || "";
   ["name", "email", "system", "reason", "status"].forEach((field) => {
     if (request) form.elements[field].value = request[field] || "";
   });
   form.elements.status.value = request?.status || "pending";
   form.elements.urgent.checked = Boolean(request?.urgent);
-  $("#requestModalTitle").textContent = request ? "แก้ไขคำขอ" : "เพิ่มคำขอ";
+  $("#requestModalTitle").textContent = "แก้ไขคำขอจาก LINE";
   openModal("requestModal");
 }
 
@@ -1032,6 +1037,10 @@ $("#requestForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const existing = requests.find((request) => request.id === form.elements.id.value);
+  if (!existing) {
+    toast("เพิ่มคำขอจากหน้าเว็บไม่ได้", "คำขอใหม่ต้องมาจากกลุ่ม LINE “บัญชี 1” เท่านั้น");
+    return;
+  }
   const data = {
     name: form.elements.name.value.trim(),
     email: form.elements.email.value.trim(),
@@ -1040,8 +1049,7 @@ $("#requestForm").addEventListener("submit", (event) => {
     status: form.elements.status.value,
     urgent: form.elements.urgent.checked,
   };
-  if (existing) Object.assign(existing, data);
-  else requests.unshift({ id: crypto.randomUUID(), ...data, date: todayIso(), source: "WEB" });
+  Object.assign(existing, data);
   saveRequests();
   closeModal("requestModal");
   renderRequests();
@@ -1398,7 +1406,6 @@ document.addEventListener("click", async (event) => {
 });
 
 $("#newItemBtn").addEventListener("click", () => openItemEditor());
-$("#newRequestBtn").addEventListener("click", () => openRequestEditor());
 $("#menuBtn").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
 $("#lockVaultBtn").addEventListener("click", () => lockVault("ผู้ดูแลกดล็อก Vault"));
 $("#themeBtn").addEventListener("click", () => {
