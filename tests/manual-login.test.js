@@ -26,6 +26,20 @@ test("manual logout remains available", () => {
   );
 });
 
+test("privacy shield hides an unlocked vault when capture-related focus is lost", () => {
+  assert.match(pageSource, /id="privacyShield"/);
+  assert.match(pageSource, /id="screenWatermark"/);
+  assert.match(appSource, /function hasSensitiveScreenContent/);
+  assert.match(appSource, /input\[type="password"\]/);
+  assert.match(appSource, /function activatePrivacyShield/);
+  assert.match(appSource, /window\.addEventListener\("blur", \(\) => activatePrivacyShield\(\)\)/);
+  assert.match(appSource, /document\.addEventListener\("visibilitychange"/);
+  assert.match(appSource, /event\.key !== "PrintScreen"/);
+  assert.match(appSource, /window\.addEventListener\("beforeprint"/);
+  assert.match(appSource, /deactivatePrivacyShield\(true\)/);
+  assert.match(appSource, /if \(document\.hidden \|\| !document\.hasFocus\(\)\) activatePrivacyShield\(\)/);
+});
+
 test("login targets the submit button and allows only one active tab", () => {
   assert.match(
     appSource,
