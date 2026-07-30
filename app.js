@@ -1112,7 +1112,12 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     }
     event.currentTarget.reset();
     afterUnlock();
-    if (result.recoverySource === "recovery") {
+    if (result.repairError) {
+      toast(
+        "เปิด Vault ได้ แต่สำเนาสำรองยังไม่สมบูรณ์",
+        "กรุณาส่งออก Backup หลังเข้าสู่ระบบ ระบบจะพยายามบันทึกสำเนาใหม่อีกครั้ง",
+      );
+    } else if (result.recoverySource === "recovery") {
       toast(
         "กู้คืน Vault จาก Recovery Snapshot สำเร็จ",
         "ระบบซ่อม Vault ที่ถูกแท็บเก่าเขียนทับ และเปิดข้อมูลล่าสุดให้แล้ว",
@@ -1134,6 +1139,7 @@ $("#unlockForm").addEventListener("submit", async (event) => {
       );
     }
   } catch (error) {
+    console.error("Vault unlock failed after server PIN verification.", error);
     releaseActiveVaultTab();
     $("#unlockError").textContent = serverPinVerified
       ? "PIN ถูกต้องสำหรับ Server แต่ Vault นี้อาจสร้างด้วย PIN เดิม กรุณากู้คืน Backup หรือเก็บ Vault เดิมก่อนสร้างใหม่"
