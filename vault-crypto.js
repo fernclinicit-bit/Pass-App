@@ -5,6 +5,7 @@ export const VAULT_STORAGE_KEY = "passly-encrypted-vault-v1";
 export const VAULT_VERSION = 1;
 export const KDF_ITERATIONS = 600_000;
 export const SHARE_KDF_ITERATIONS = 250_000;
+export const MAX_SHARE_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 export const MASTER_PASSWORD_NORMALIZATION = "NFKC";
 export const VAULT_SECRET_CANONICALIZATION = "PASSLY-V2";
 export const VAULT_SECRET_ENCODING = "SHA-512-64-BYTE";
@@ -19,6 +20,35 @@ export function normalizeVaultSecret(value) {
     return thaiDigitsToAscii(normalized).replace(/[\s-]/g, "");
   }
   return normalized;
+}
+
+export function toLocalDatetimeValue(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return [
+    `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`,
+    `${pad(value.getHours())}:${pad(value.getMinutes())}`,
+  ].join("T");
+}
+
+export function resolveShareExpiry(expiryValue, customValue, nowMs = Date.now()) {
+  let expiresAt;
+  if (expiryValue === "custom") {
+    if (!customValue) throw new Error("กรุณากำหนดวันและเวลาหมดอายุ");
+    expiresAt = new Date(customValue);
+  } else {
+    const hours = Number(expiryValue);
+    if (!Number.isFinite(hours) || hours <= 0) throw new Error("ระยะเวลาหมดอายุไม่ถูกต้อง");
+    expiresAt = new Date(nowMs + hours * 3_600_000);
+  }
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= nowMs) {
+    throw new Error("วันและเวลาหมดอายุต้องอยู่ในอนาคต");
+  }
+  if (expiresAt.getTime() > nowMs + MAX_SHARE_EXPIRY_MS) {
+    throw new Error("ลิงก์ Passly กำหนดอายุได้สูงสุด 30 วัน");
+  }
+  return expiresAt.toISOString();
 }
 
 export function bytesToBase64(bytes) {

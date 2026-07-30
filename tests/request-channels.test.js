@@ -52,6 +52,10 @@ test("delivery menu offers LINE by default without Lark", async () => {
   assert.doesNotMatch(html, /ส่งลิงก์เข้า Lark/);
   assert.match(app, /channel === "line"/);
   assert.match(app, /sendLineDelivery/);
+  assert.match(html, /id="deliveryExpiry"/);
+  assert.match(html, /option value="custom">กำหนดวันและเวลาเอง/);
+  assert.match(html, /name="customExpiryAt"/);
+  assert.match(app, /resolveShareExpiry/);
 });
 
 test("password requests are accepted from LINE only", async (context) => {
@@ -168,6 +172,22 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.equal(lineRequest.name, "LINE Test User");
 
   const shareUrl = `${baseUrl}/share.html#encrypted-payload`;
+  const tooLongDelivery = await fetch(`${baseUrl}/api/line/deliver`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      cookie: adminCookie,
+    },
+    body: JSON.stringify({
+      requestId: lineRequest.id,
+      itemName: "Google Workspace",
+      expiresAt: new Date(Date.now() + 31 * 24 * 3_600_000).toISOString(),
+      shareUrl,
+      pin: "Abc12345",
+    }),
+  });
+  assert.equal(tooLongDelivery.status, 400);
+
   const deliveryResponse = await fetch(`${baseUrl}/api/line/deliver`, {
     method: "POST",
     headers: {
@@ -177,7 +197,7 @@ test("password requests are accepted from LINE only", async (context) => {
     body: JSON.stringify({
       requestId: lineRequest.id,
       itemName: "Google Workspace",
-      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString(),
       shareUrl,
       pin: "Abc12345",
     }),
