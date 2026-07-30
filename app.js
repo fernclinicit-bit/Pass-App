@@ -1683,26 +1683,52 @@ $("#exportActivityBtn").addEventListener("click", () => {
 $("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterModal"));
 
 async function resetVaultStorage() {
-  const confirmation = prompt("ระบบจะเก็บ Vault เดิมเป็น Backup เข้ารหัส พิมพ์ RESET เพื่อสร้าง Vault ใหม่:");
-  if (confirmation !== "RESET") return;
-  try {
-    if (vault && vaultKey) await persistVault();
-    const archive = createVaultArchive(localStorage);
-    downloadFile(
-      `passly-vault-archive-${todayIso()}.json`,
-      JSON.stringify(archive, null, 2),
-    );
-    archiveAndResetStoredVault(localStorage);
-    vault = null;
-    vaultKey = null;
-    releaseActiveVaultTab();
-    location.reload();
-  } catch (error) {
-    toast("สร้าง Vault ใหม่ไม่สำเร็จ", error.message);
-  }
+  if (vault && vaultKey) await persistVault();
+  const archive = createVaultArchive(localStorage);
+  downloadFile(
+    `passly-vault-archive-${todayIso()}.json`,
+    JSON.stringify(archive, null, 2),
+  );
+  archiveAndResetStoredVault(localStorage);
+  vault = null;
+  vaultKey = null;
+  releaseActiveVaultTab();
+  location.reload();
 }
-$("#resetVaultBtn").addEventListener("click", resetVaultStorage);
-$("#resetFromLock").addEventListener("click", resetVaultStorage);
+
+function openResetVaultConfirmation() {
+  const form = $("#resetVaultForm");
+  form.reset();
+  $("#resetVaultError").hidden = true;
+  openModal("resetVaultModal");
+  setTimeout(() => form.elements.confirmation.focus(), 80);
+}
+
+$("#resetVaultForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const confirmation = form.elements.confirmation.value.trim().toUpperCase();
+  const error = $("#resetVaultError");
+  if (confirmation !== "RESET") {
+    error.textContent = "กรุณาพิมพ์ RESET ให้ถูกต้อง";
+    error.hidden = false;
+    return;
+  }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  button.textContent = "กำลังเก็บ Backup เข้ารหัส…";
+  error.hidden = true;
+  try {
+    await resetVaultStorage();
+  } catch (resetError) {
+    error.textContent = resetError.message;
+    error.hidden = false;
+    button.disabled = false;
+    button.textContent = "เก็บ Backup และสร้าง Vault ใหม่";
+  }
+});
+$("#resetVaultBtn").addEventListener("click", openResetVaultConfirmation);
+$("#resetFromLock").addEventListener("click", openResetVaultConfirmation);
 
 $("#regenerateSharePin").addEventListener("click", () => { $("#deliverForm").elements.pin.value = generateSharePin(); });
 $("#deliveryChannel").addEventListener("change", updateDeliverySubmitButton);
