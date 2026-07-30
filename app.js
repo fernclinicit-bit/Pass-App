@@ -11,11 +11,14 @@ import {
 } from "./vault-crypto.js";
 import {
   VAULT_BACKUP_STORAGE_KEY,
+  archiveAndResetStoredVault,
   commitVaultEnvelope,
+  createVaultArchive,
+  isVaultArchive,
   isVaultEnvelope,
   queueVaultSave,
   readVaultEnvelope,
-  removeStoredVault,
+  restoreVaultArchive,
   unlockStoredVault,
 } from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
@@ -63,6 +66,8 @@ let shareResult = null;
 let lineInterval = null;
 let linePollReady = false;
 let lockInProgress = false;
+let releaseVaultTabLock = null;
+let vaultTabLockTask = null;
 let requests = loadRequests();
 
 function escapeHtml(value = "") {
@@ -129,6 +134,37 @@ async function copyText(value, title = "คัดลอกแล้ว") {
 
 function getStoredEnvelope() {
   return readVaultEnvelope(localStorage);
+}
+
+async function acquireVaultTabLock() {
+  if (!navigator.locks?.request) return true;
+  if (releaseVaultTabLock) return true;
+
+  let resolveAvailability;
+  const availability = new Promise((resolve) => { resolveAvailability = resolve; });
+  vaultTabLockTask = navigator.locks.request(
+    "passly-active-vault",
+    { ifAvailable: true },
+    async (lock) => {
+      if (!lock) {
+        resolveAvailability(false);
+        return;
+      }
+      resolveAvailability(true);
+      await new Promise((resolve) => { releaseVaultTabLock = resolve; });
+      releaseVaultTabLock = null;
+    },
+  ).catch((error) => {
+    console.warn("Unable to coordinate the active Passly tab.", error);
+    resolveAvailability(true);
+  });
+  return availability;
+}
+
+function releaseActiveVaultTab() {
+  releaseVaultTabLock?.();
+  releaseVaultTabLock = null;
+  vaultTabLockTask = null;
 }
 
 function createEmptyVault() {
@@ -302,6 +338,7 @@ async function lockVault(reason = "ออกจากระบบแล้ว", 
     document.body.style.overflow = "";
     setLockScreenMode();
     $("#unlockError").hidden = true;
+    releaseActiveVaultTab();
     lockInProgress = false;
     if (reason) toast("ออกจากระบบ Passly", reason);
   }
@@ -898,8 +935,13 @@ $("#setupForm").addEventListener("submit", async (event) => {
   lockInProgress = true;
   const button = form.querySelector("button[type=submit]");
   button.disabled = true;
-  button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
+  button.textContent = "กำลังตรวจสอบแท็บ…";
   try {
+    if (!await acquireVaultTabLock()) {
+      toast("Passly เปิดอยู่ในแท็บอื่น", "กรุณาปิดแท็บ Passly อื่นก่อนสร้าง Vault");
+      return;
+    }
+    button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
     vault = createEmptyVault();
     const result = await createVaultEnvelope(vault, form.elements.password.value);
     vaultKey = result.key;
@@ -912,6 +954,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
     afterUnlock();
     toast("สร้าง Passly Vault แล้ว", "ข้อมูลพร้อมบันทึกแบบเข้ารหัส");
   } catch (error) {
+    releaseActiveVaultTab();
     vault = null;
     vaultKey = null;
     toast("สร้าง Vault ไม่สำเร็จ", error.message);
@@ -924,11 +967,19 @@ $("#setupForm").addEventListener("submit", async (event) => {
 
 $("#unlockForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = event.currentTarget.querySelector("button");
+  if (lockInProgress) return;
+  lockInProgress = true;
+  const button = event.currentTarget.querySelector('button[type="submit"]');
   button.disabled = true;
-  button.textContent = "กำลังถอดรหัส…";
+  button.textContent = "กำลังตรวจสอบแท็บ…";
   $("#unlockError").hidden = true;
   try {
+    if (!await acquireVaultTabLock()) {
+      $("#unlockError").textContent = "Passly เปิดใช้งานอยู่ในแท็บอื่น กรุณาปิดแท็บนั้นก่อน";
+      $("#unlockError").hidden = false;
+      return;
+    }
+    button.textContent = "กำลังถอดรหัส…";
     const enteredSecret = event.currentTarget.elements.password.value;
     const result = await unlockStoredVault(
       localStorage,
@@ -958,9 +1009,11 @@ $("#unlockForm").addEventListener("submit", async (event) => {
       );
     }
   } catch {
+    releaseActiveVaultTab();
     $("#unlockError").textContent = "รหัสผ่านหรือ PIN ไม่ถูกต้อง โปรดตรวจภาษาแป้นพิมพ์และ Caps Lock";
     $("#unlockError").hidden = false;
   } finally {
+    lockInProgress = false;
     button.disabled = false;
     button.innerHTML = 'เข้าสู่ระบบ <span>→</span>';
   }
@@ -1525,15 +1578,19 @@ $("#exportVaultBtn").addEventListener("click", async () => {
   toast("ดาวน์โหลด Backup แล้ว", "ไฟล์ยังคงเข้ารหัสด้วยรหัสผ่านหรือ PIN");
 });
 $("#importBackupBtn").addEventListener("click", () => $("#backupFileInput").click());
+$("#restoreFromLock").addEventListener("click", () => $("#backupFileInput").click());
 $("#backupFileInput").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   event.target.value = "";
   if (!file) return;
   try {
-    const envelope = JSON.parse(await file.text());
-    if (!isVaultEnvelope(envelope)) throw new Error("ไม่ใช่ Passly encrypted backup");
+    const backupData = JSON.parse(await file.text());
+    if (!isVaultEnvelope(backupData) && !isVaultArchive(backupData)) {
+      throw new Error("ไม่ใช่ Passly encrypted backup");
+    }
     if (!confirm("กู้คืน Backup นี้และแทนที่ Vault ปัจจุบันใช่หรือไม่?")) return;
-    commitVaultEnvelope(localStorage, envelope);
+    if (isVaultArchive(backupData)) restoreVaultArchive(localStorage, backupData);
+    else commitVaultEnvelope(localStorage, backupData);
     lockVault("กรอกรหัสผ่านหรือ PIN ของ Backup เพื่อเปิด Vault", { save: false });
   } catch (error) {
     toast("กู้คืนไม่สำเร็จ", error.message);
@@ -1548,13 +1605,24 @@ $("#exportActivityBtn").addEventListener("click", () => {
 
 $("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterModal"));
 
-function resetVaultStorage() {
-  const confirmation = prompt("การลบไม่สามารถย้อนกลับได้ พิมพ์ DELETE เพื่อยืนยัน:");
-  if (confirmation !== "DELETE") return;
-  removeStoredVault(localStorage);
-  vault = null;
-  vaultKey = null;
-  location.reload();
+async function resetVaultStorage() {
+  const confirmation = prompt("ระบบจะเก็บ Vault เดิมเป็น Backup เข้ารหัส พิมพ์ RESET เพื่อสร้าง Vault ใหม่:");
+  if (confirmation !== "RESET") return;
+  try {
+    if (vault && vaultKey) await persistVault();
+    const archive = createVaultArchive(localStorage);
+    downloadFile(
+      `passly-vault-archive-${todayIso()}.json`,
+      JSON.stringify(archive, null, 2),
+    );
+    archiveAndResetStoredVault(localStorage);
+    vault = null;
+    vaultKey = null;
+    releaseActiveVaultTab();
+    location.reload();
+  } catch (error) {
+    toast("สร้าง Vault ใหม่ไม่สำเร็จ", error.message);
+  }
 }
 $("#resetVaultBtn").addEventListener("click", resetVaultStorage);
 $("#resetFromLock").addEventListener("click", resetVaultStorage);

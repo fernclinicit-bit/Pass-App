@@ -5,6 +5,7 @@ import {
 } from "./vault-crypto.js";
 
 export const VAULT_BACKUP_STORAGE_KEY = "passly-encrypted-vault-backup-v1";
+export const VAULT_ARCHIVE_STORAGE_KEY = "passly-encrypted-vault-archive-v1";
 
 export function isVaultEnvelope(value) {
   return Boolean(
@@ -25,6 +26,57 @@ export function readVaultEnvelope(storage, key = VAULT_STORAGE_KEY) {
   } catch {
     return null;
   }
+}
+
+export function isVaultArchive(value) {
+  return Boolean(
+    value
+    && value.format === "passly-encrypted-vault-archive"
+    && value.version === 1
+    && (value.current === null || isVaultEnvelope(value.current))
+    && (value.backup === null || isVaultEnvelope(value.backup))
+    && (value.current || value.backup),
+  );
+}
+
+export function createVaultArchive(storage) {
+  const archive = {
+    format: "passly-encrypted-vault-archive",
+    version: 1,
+    archivedAt: new Date().toISOString(),
+    current: readVaultEnvelope(storage),
+    backup: readVaultEnvelope(storage, VAULT_BACKUP_STORAGE_KEY),
+  };
+  if (!isVaultArchive(archive)) throw new Error("ไม่พบ Vault เดิมสำหรับสำรอง");
+  return archive;
+}
+
+export function archiveAndResetStoredVault(storage) {
+  const archive = createVaultArchive(storage);
+  const currentRaw = storage.getItem(VAULT_STORAGE_KEY);
+  const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
+  const previousArchiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
+
+  storage.removeItem(VAULT_STORAGE_KEY);
+  storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
+  storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
+  try {
+    storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(archive));
+  } catch (error) {
+    if (currentRaw !== null) storage.setItem(VAULT_STORAGE_KEY, currentRaw);
+    if (backupRaw !== null) storage.setItem(VAULT_BACKUP_STORAGE_KEY, backupRaw);
+    if (previousArchiveRaw !== null) storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, previousArchiveRaw);
+    throw error;
+  }
+  return archive;
+}
+
+export function restoreVaultArchive(storage, archive) {
+  if (!isVaultArchive(archive)) throw new Error("ไฟล์สำรอง Vault ไม่ถูกต้อง");
+  if (archive.current) storage.setItem(VAULT_STORAGE_KEY, JSON.stringify(archive.current));
+  else storage.removeItem(VAULT_STORAGE_KEY);
+  if (archive.backup) storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(archive.backup));
+  else storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
 }
 
 export function commitVaultEnvelope(
