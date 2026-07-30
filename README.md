@@ -17,8 +17,8 @@ Password Manager และระบบบริหารคำขอรหัส
 - นำเข้ารายการจาก `.xlsx`, `.csv` และ `.json` ภายในเบราว์เซอร์
 - รับคำขอจากกลุ่ม LINE และแจกข้อมูลจาก Vault
 - ช่องทางรับคำขอใหม่มีเฉพาะ LINE กลุ่ม “บัญชี 1” ไม่รับ Event จาก Lark หรือหน้าเว็บ
-- Passly Secure Share: ลิงก์เข้ารหัสที่ต้องใช้ PIN แยกช่องทาง
-- ส่งลิงก์ Passly Share เข้า Lark Chat
+- Passly Secure Share: ลิงก์เข้ารหัสที่ต้องใช้ Share PIN
+- ส่งลิงก์ Passly Share และ PIN เป็น 2 ข้อความกลับเข้ากลุ่ม LINE ต้นทาง
 
 ## รูปแบบการเก็บข้อมูล
 
@@ -58,8 +58,8 @@ Passly รองรับ Workbook `User Pass` ที่มีคอลัมน
 2. เลือก Login จาก Vault
 3. Passly เข้ารหัส Username และ Password ด้วย PIN แบบ PBKDF2 + AES-GCM
 4. Ciphertext อยู่ใน URL fragment และไม่ถูกส่งเป็นข้อมูลให้ Server
-5. ส่งลิงก์ผ่าน Lark หรือช่องทางส่วนตัว
-6. ส่ง PIN ให้ผู้รับผ่านอีกช่องทางหนึ่ง
+5. Server ใช้ LINE Push API ส่งลิงก์เข้ารหัสกลับไปยังกลุ่มต้นทางของคำขอ
+6. ส่ง Share PIN เป็นข้อความ LINE แยกจากข้อความลิงก์
 7. ผู้รับเปิด `share.html` และกรอก PIN เพื่อถอดรหัสบนอุปกรณ์
 
 วันหมดอายุของ Secure Share ถูกตรวจบนหน้าเว็บผู้รับ ลิงก์แบบไม่ใช้ฐานข้อมูล
@@ -86,7 +86,6 @@ npm test
 - `LINE_CHANNEL_ACCESS_TOKEN` — ส่งเมนูและข้อความตอบกลับใน LINE
 - `LINE_ALLOWED_GROUP_ID` — จำกัดเฉพาะกลุ่ม “บัญชี 1”
 - `LINE_GROUP_NAME` — ชื่อกลุ่มที่แสดงในระบบ
-- `LARK_WEBHOOK_URL` — Lark Custom Bot webhook ฝั่ง Server
 - `PORT` — ค่าเริ่มต้น `3030`
 - `DATA_DIR` — ที่เก็บคำขอจาก LINE ค่าเริ่มต้น `./data`
 
@@ -96,8 +95,8 @@ LINE Webhook:
 https://YOUR-DOMAIN/api/line/webhook
 ```
 
-Lark ใช้เป็นช่องทางส่งลิงก์หลังผู้ดูแลอนุมัติเท่านั้น Server ไม่เปิด
-Lark Event Subscription สำหรับรับคำขอ Password
+หลังผู้ดูแลอนุมัติ Passly จะส่ง Secure Share กลับด้วย LINE เท่านั้น โดยใช้
+`lineGroupId` ที่บันทึกจากคำขอต้นทาง ไม่สามารถเลือกส่งไปยังกลุ่มอื่นจากหน้าเว็บได้
 
 ## Deploy บน Render
 

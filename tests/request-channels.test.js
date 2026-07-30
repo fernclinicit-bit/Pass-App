@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { once } from "node:events";
+import fs from "node:fs/promises";
+import http from "node:http";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import test from "node:test";
@@ -38,6 +42,18 @@ async function waitForServer(url, child) {
 test("password requests are accepted from LINE only", async (context) => {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "passly-line-test-"));
+  const lineCalls = [];
+  const lineApi = http.createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    lineCalls.push({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : null });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(req.method === "GET" ? JSON.stringify({ displayName: "LINE Test User" }) : "{}");
+  });
+  lineApi.listen(0, "127.0.0.1");
+  await once(lineApi, "listening");
+  const lineApiUrl = `http://127.0.0.1:${lineApi.address().port}`;
   const child = spawn(process.execPath, ["server.cjs"], {
     cwd: projectRoot,
     env: {
@@ -45,8 +61,9 @@ test("password requests are accepted from LINE only", async (context) => {
       NODE_ENV: "production",
       PORT: String(port),
       LINE_CHANNEL_SECRET: "test-line-secret",
-      LINE_CHANNEL_ACCESS_TOKEN: "",
-      LARK_WEBHOOK_URL: "",
+      LINE_CHANNEL_ACCESS_TOKEN: "test-line-token",
+      LINE_API_BASE_URL: lineApiUrl,
+      DATA_DIR: dataDir,
     },
     stdio: "ignore",
   });
@@ -56,11 +73,15 @@ test("password requests are accepted from LINE only", async (context) => {
       child.kill();
       await once(child, "exit");
     }
+    lineApi.close();
+    await once(lineApi, "close");
+    await fs.rm(dataDir, { recursive: true, force: true });
   });
 
   const healthResponse = await waitForServer(`${baseUrl}/api/health`, child);
   const health = await healthResponse.json();
   assert.equal(health.requestChannel, "LINE");
+  assert.equal(health.deliveryChannel, "LINE");
   assert.equal(health.larkInboundEnabled, false);
 
   const larkInbound = await fetch(`${baseUrl}/api/lark/webhook`, {
@@ -82,5 +103,65 @@ test("password requests are accepted from LINE only", async (context) => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ text: "delivery test" }),
   });
-  assert.equal(larkOutbound.status, 400);
+  assert.equal(larkOutbound.status, 404);
+
+  const webhookPayload = JSON.stringify({
+    events: [{
+      type: "postback",
+      webhookEventId: "WEBHOOK-DELIVERY-1",
+      timestamp: Date.now(),
+      replyToken: "test-reply-token",
+      source: {
+        type: "group",
+        groupId: "C-test-group",
+        userId: "U-test-user",
+      },
+      postback: {
+        data: new URLSearchParams({ action: "request", system: "Google Workspace" }).toString(),
+      },
+    }],
+  });
+  const signature = crypto.createHmac("sha256", "test-line-secret").update(webhookPayload).digest("base64");
+  const webhookResponse = await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-line-signature": signature,
+    },
+    body: webhookPayload,
+  });
+  assert.equal(webhookResponse.status, 200);
+  assert.equal((await webhookResponse.json()).received, 1);
+
+  const requestList = await fetch(`${baseUrl}/api/requests`).then((response) => response.json());
+  const lineRequest = requestList.requests[0];
+  assert.equal(lineRequest.lineGroupId, "C-test-group");
+  assert.equal(lineRequest.name, "LINE Test User");
+
+  const shareUrl = `${baseUrl}/share.html#encrypted-payload`;
+  const deliveryResponse = await fetch(`${baseUrl}/api/line/deliver`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      requestId: lineRequest.id,
+      itemName: "Google Workspace",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      shareUrl,
+      pin: "Abc12345",
+    }),
+  });
+  const deliveryResult = await deliveryResponse.json();
+  assert.equal(deliveryResponse.status, 200, JSON.stringify(deliveryResult));
+  assert.equal(deliveryResult.deliveredTo, "LINE");
+
+  const pushCall = lineCalls.find((call) => call.url === "/v2/bot/message/push");
+  assert.ok(pushCall, "LINE Push API should be called");
+  assert.equal(pushCall.body.to, "C-test-group");
+  assert.equal(pushCall.body.messages.length, 2);
+  assert.match(pushCall.body.messages[0].text, /share\.html#encrypted-payload/);
+  assert.match(pushCall.body.messages[1].text, /Abc12345/);
+
+  const deliveredList = await fetch(`${baseUrl}/api/requests`).then((response) => response.json());
+  assert.equal(deliveredList.requests[0].status, "delivered");
+  assert.equal(deliveredList.requests[0].deliveryMethod, "line-secure-share");
 });

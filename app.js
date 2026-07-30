@@ -131,8 +131,8 @@ function getStoredEnvelope() {
 }
 
 function createEmptyVault() {
-  let legacyLark = {};
-  try { legacyLark = JSON.parse(localStorage.getItem("passly-lark") || "{}"); } catch { /* ignore */ }
+  let legacyShareSettings = {};
+  try { legacyShareSettings = JSON.parse(localStorage.getItem("passly-lark") || "{}"); } catch { /* ignore */ }
   return {
     version: 1,
     createdAt: nowIso(),
@@ -155,8 +155,7 @@ function createEmptyVault() {
     generatorHistory: [],
     activity: [{ id: crypto.randomUUID(), action: "สร้าง Vault", detail: "เริ่มต้น Passly Vault แบบเข้ารหัส", at: nowIso() }],
     settings: {
-      larkWebhook: legacyLark.webhook || "",
-      larkPrefix: legacyLark.prefix || "[Passly] ข้อมูลเข้าใช้งาน",
+      sharePrefix: legacyShareSettings.prefix || "[Passly] ข้อมูลเข้าใช้งาน",
     },
   };
 }
@@ -170,8 +169,9 @@ function migrateVaultData(data) {
   data.generatorHistory ||= [];
   data.activity ||= [];
   data.settings ||= {};
-  data.settings.larkPrefix ||= "[Passly] ข้อมูลเข้าใช้งาน";
-  data.settings.larkWebhook ||= "";
+  data.settings.sharePrefix ||= data.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
+  delete data.settings.larkPrefix;
+  delete data.settings.larkWebhook;
   return data;
 }
 
@@ -309,8 +309,6 @@ function afterUnlock() {
   $("#lockScreen").hidden = true;
   $("#mainApp").hidden = false;
   document.body.classList.add("vault-open");
-  $("#larkWebhook").value = vault.settings.larkWebhook || "";
-  $("#larkPrefix").value = vault.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
   renderAll();
   showView(activeView);
   pullLineRequests();
@@ -768,14 +766,15 @@ function openGroupEditor(id = null) {
   openModal("groupModal");
 }
 
-async function sendLark(text) {
-  const response = await fetch("/api/lark", {
+async function sendLineDelivery({ requestId, itemName, expiresAt, shareUrl, pin }) {
+  const response = await fetch("/api/line/deliver", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ webhook: vault.settings.larkWebhook || "", text }),
+    body: JSON.stringify({ requestId, itemName, expiresAt, shareUrl, pin }),
   });
-  const result = await response.json();
-  if (!response.ok || result.ok === false) throw new Error(result.error || "Lark ส่งข้อความไม่สำเร็จ");
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) throw new Error(result.error || "LINE ส่งข้อมูลไม่สำเร็จ");
+  return result;
 }
 
 async function checkServerConfiguration() {
@@ -1020,42 +1019,58 @@ $("#requestForm").addEventListener("submit", (event) => {
 $("#deliverForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
   const request = requests.find((entry) => entry.id === form.elements.requestId.value);
   const item = vault.items.find((entry) => entry.id === form.elements.itemId.value);
   if (!request || !item) return;
   if (item.reprompt && !await verifyMasterPassword("ยืนยันรหัสผ่านก่อนสร้างลิงก์แจกข้อมูล")) return;
-  const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
-  const pin = form.elements.pin.value;
-  const encryptedFragment = await createSharePayload({
-    title: item.name,
-    username: item.username,
-    password: item.password,
-    note: item.purpose || "",
-    recipient: request.name,
-    expiresAt,
-  }, pin);
-  const shareUrl = new URL("share.html", location.href);
-  shareUrl.hash = encryptedFragment;
-  const prefix = vault.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
-  const message = `${prefix}\nผู้รับ: ${request.name}\nระบบ: ${item.name}\nหมดอายุ: ${formatDateTime(expiresAt)}\nลิงก์: ${shareUrl.href}\n\nกรุณารับ Share PIN จากผู้ดูแลผ่านอีกช่องทาง`;
-  const channel = form.elements.channel.value;
-  if (channel === "lark") await sendLark(message);
-  else await navigator.clipboard.writeText(message);
-  const reference = await sha256Reference(shareUrl.href);
-  request.status = "delivered";
-  request.deliveredAt = nowIso();
-  request.deliveryMethod = "passly-share";
-  request.deliveryAudit = { itemId: item.id, channel, expiresAt, reference };
-  saveRequests();
-  addActivity("แจกข้อมูลจาก Vault", `${item.name} ให้ ${request.name} · ${channel} · ref ${reference}`, item.id);
-  await persistVault();
-  shareResult = { message, pin };
-  $("#shareMessage").value = message;
-  $("#sharePinResult").textContent = pin;
-  closeModal("deliverModal");
-  openModal("shareResultModal");
-  renderAll();
-  toast(channel === "lark" ? "ส่งลิงก์เข้า Lark แล้ว" : "คัดลอกลิงก์แล้ว", "แจ้ง PIN ให้ผู้รับผ่านอีกช่องทาง");
+  submitButton.disabled = true;
+  submitButton.textContent = "กำลังส่งเข้า LINE…";
+  try {
+    const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
+    const pin = form.elements.pin.value;
+    const encryptedFragment = await createSharePayload({
+      title: item.name,
+      username: item.username,
+      password: item.password,
+      note: item.purpose || "",
+      recipient: request.name,
+      expiresAt,
+    }, pin);
+    const shareUrl = new URL("share.html", location.href);
+    shareUrl.hash = encryptedFragment;
+    const prefix = vault.settings.sharePrefix || "[Passly] ข้อมูลเข้าใช้งาน";
+    const message = `${prefix}\nผู้รับ: ${request.name}\nระบบ: ${item.name}\nหมดอายุ: ${formatDateTime(expiresAt)}\nลิงก์: ${shareUrl.href}`;
+
+    await sendLineDelivery({
+      requestId: request.id,
+      itemName: item.name,
+      expiresAt,
+      shareUrl: shareUrl.href,
+      pin,
+    });
+
+    const reference = await sha256Reference(shareUrl.href);
+    request.status = "delivered";
+    request.deliveredAt = nowIso();
+    request.deliveryMethod = "line-secure-share";
+    request.deliveryAudit = { itemId: item.id, channel: "line", expiresAt, reference };
+    saveRequests();
+    addActivity("แจกข้อมูลจาก Vault", `${item.name} ให้ ${request.name} · LINE · ref ${reference}`, item.id);
+    await persistVault();
+    shareResult = { message, pin };
+    $("#shareMessage").value = message;
+    $("#sharePinResult").textContent = pin;
+    closeModal("deliverModal");
+    openModal("shareResultModal");
+    renderAll();
+    toast("ส่งเข้า LINE แล้ว", "ลิงก์เข้ารหัสและ Share PIN ถูกส่งเป็น 2 ข้อความ");
+  } catch (error) {
+    toast("ส่งเข้า LINE ไม่สำเร็จ", error.message);
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = 'ส่งเข้า LINE <span>→</span>';
+  }
 });
 
 $("#collectionForm").addEventListener("submit", async (event) => {
@@ -1487,13 +1502,6 @@ $("#exportActivityBtn").addEventListener("click", () => {
   downloadFile(`passly-activity-${todayIso()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
 });
 
-$("#saveLarkBtn").addEventListener("click", async () => {
-  vault.settings.larkWebhook = $("#larkWebhook").value.trim();
-  vault.settings.larkPrefix = $("#larkPrefix").value.trim() || "[Passly] ข้อมูลเข้าใช้งาน";
-  addActivity("บันทึก Lark Settings", vault.settings.larkWebhook ? "Webhook ถูกเก็บใน Vault แบบเข้ารหัส" : "ใช้ Webhook จาก Server");
-  await persistVault();
-  toast("บันทึก Lark แล้ว", "ค่าถูกเข้ารหัสรวมกับ Vault");
-});
 $("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterModal"));
 
 function resetVaultStorage() {
