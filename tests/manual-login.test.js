@@ -34,6 +34,35 @@ test("login targets the submit button and allows only one active tab", () => {
   assert.match(appSource, /navigator\.locks\.request/);
   assert.match(appSource, /Passly เปิดใช้งานอยู่ในแท็บอื่น/);
   assert.match(pageSource, /id="resetFromLock"/);
+  assert.match(pageSource, /id="restoreArchivedFromLock"/);
   assert.match(pageSource, /id="restoreFromLock"/);
   assert.match(pageSource, /เก็บ Vault เดิมและสร้างใหม่/);
+  assert.match(appSource, /readVaultArchive\(localStorage\)/);
+});
+
+test("vault creation snapshots one PIN before asynchronous server verification", () => {
+  const setupStart = appSource.indexOf('$("#setupForm").addEventListener("submit"');
+  const unlockStart = appSource.indexOf('$("#unlockForm").addEventListener("submit"');
+  const setupSource = appSource.slice(setupStart, unlockStart);
+
+  assert.match(setupSource, /const enteredSecret = form\.elements\.password\.value/);
+  assert.match(setupSource, /await authenticateServerPin\(enteredSecret\)/);
+  assert.match(setupSource, /createVaultEnvelope\(vault, enteredSecret\)/);
+  assert.doesNotMatch(
+    setupSource,
+    /createVaultEnvelope\(vault, form\.elements\.password\.value\)/,
+  );
+  assert.match(setupSource, /input\.disabled = true/);
+});
+
+test("PIN rotation snapshots current and new values before asynchronous work", () => {
+  const changeStart = appSource.indexOf('$("#changeMasterForm").addEventListener("submit"');
+  const clickStart = appSource.indexOf('document.addEventListener("click"', changeStart);
+  const changeSource = appSource.slice(changeStart, clickStart);
+
+  assert.match(changeSource, /const currentSecret = form\.elements\.currentPassword\.value/);
+  assert.match(changeSource, /const newSecret = form\.elements\.newPassword\.value/);
+  assert.match(changeSource, /unlockStoredVault\(localStorage, currentSecret\)/);
+  assert.match(changeSource, /authenticateServerPin\(newSecret\)/);
+  assert.match(changeSource, /createVaultEnvelope\(vault, newSecret\)/);
 });
