@@ -19,6 +19,17 @@ export function isVaultEnvelope(value) {
   );
 }
 
+export function vaultEnvelopeIdentity(envelope) {
+  if (!isVaultEnvelope(envelope)) return null;
+  return [
+    envelope.version ?? 1,
+    envelope.salt,
+    envelope.iterations ?? "",
+    envelope.secretEncoding ?? "",
+    envelope.secretCanonicalization ?? "",
+  ].join("|");
+}
+
 export function readVaultEnvelope(storage, key = VAULT_STORAGE_KEY) {
   try {
     const envelope = JSON.parse(storage.getItem(key) || "null");
@@ -115,19 +126,35 @@ export function removeStoredVault(storage) {
 
 export function queueVaultSave(
   previousSave,
-  { storage, vault, key, envelope, onPreviousError = console.error },
+  {
+    storage,
+    vault,
+    key,
+    envelope,
+    onPreviousError = console.error,
+    onCommitted = () => {},
+  },
 ) {
   const snapshot = structuredClone(vault);
   const keyForSave = key;
   const envelopeForSave = structuredClone(envelope);
+  const sessionIdentity = vaultEnvelopeIdentity(envelopeForSave);
 
   return Promise.resolve(previousSave)
     .catch((error) => {
       onPreviousError(error);
     })
     .then(async () => {
+      if (vaultEnvelopeIdentity(readVaultEnvelope(storage)) !== sessionIdentity) {
+        throw new Error("Vault ถูกเปลี่ยนโดยแท็บอื่น ระบบยกเลิกการบันทึกเพื่อป้องกันข้อมูลเสียหาย");
+      }
       const next = await encryptVault(snapshot, keyForSave, envelopeForSave);
+      if (vaultEnvelopeIdentity(readVaultEnvelope(storage)) !== sessionIdentity) {
+        throw new Error("Vault ถูกเปลี่ยนระหว่างบันทึก ระบบยกเลิกเพื่อป้องกันข้อมูลเสียหาย");
+      }
       commitVaultEnvelope(storage, next);
+      onCommitted(next);
+      return next;
     });
 }
 
@@ -177,6 +204,7 @@ async function unlockCompatibleEnvelope(envelope, password) {
 export async function unlockStoredVault(storage, password) {
   const current = readVaultEnvelope(storage);
   const backup = readVaultEnvelope(storage, VAULT_BACKUP_STORAGE_KEY);
+  const archive = readVaultArchive(storage);
   let currentError;
 
   if (current) {
@@ -197,9 +225,59 @@ export async function unlockStoredVault(storage, password) {
       commitVaultEnvelope(storage, backup, {
         preserveCurrentAsBackup: false,
       });
-      return { ...result, envelope: backup, recovered: true };
+      return {
+        ...result,
+        envelope: backup,
+        recovered: true,
+        recoverySource: "backup",
+      };
     } catch (error) {
       currentError ||= error;
+    }
+  }
+
+  if (archive) {
+    const attempted = new Set(
+      [current, backup]
+        .filter(Boolean)
+        .map((envelope) => JSON.stringify(envelope)),
+    );
+    for (const candidate of [archive.current, archive.backup].filter(Boolean)) {
+      if (attempted.has(JSON.stringify(candidate))) continue;
+      try {
+        const result = await unlockCompatibleEnvelope(candidate, password);
+        const failedArchive = current || backup ? createVaultArchive(storage) : null;
+        const currentRaw = storage.getItem(VAULT_STORAGE_KEY);
+        const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
+        const archiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
+        try {
+          restoreVaultArchive(storage, archive);
+          if (candidate !== archive.current) {
+            commitVaultEnvelope(storage, candidate, {
+              preserveCurrentAsBackup: false,
+            });
+          }
+          if (failedArchive) {
+            storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(failedArchive));
+          }
+        } catch (error) {
+          if (currentRaw === null) storage.removeItem(VAULT_STORAGE_KEY);
+          else storage.setItem(VAULT_STORAGE_KEY, currentRaw);
+          if (backupRaw === null) storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
+          else storage.setItem(VAULT_BACKUP_STORAGE_KEY, backupRaw);
+          if (archiveRaw === null) storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
+          else storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, archiveRaw);
+          throw error;
+        }
+        return {
+          ...result,
+          envelope: candidate,
+          recovered: true,
+          recoverySource: "archive",
+        };
+      } catch (error) {
+        currentError ||= error;
+      }
     }
   }
 

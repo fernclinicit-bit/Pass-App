@@ -196,6 +196,56 @@ test("queued saves retain their encryption key when the session locks", async ()
   assert.equal(unlocked.vault.revision, 2);
 });
 
+test("a stale tab cannot combine its old key with a replacement vault envelope", async () => {
+  const storage = new MemoryStorage();
+  const stale = await createVaultEnvelope({ revision: "stale" }, "stale-session-pin");
+  const replacement = await createVaultEnvelope({ revision: "replacement" }, "current-server-pin");
+  commitVaultEnvelope(storage, replacement.envelope, {
+    preserveCurrentAsBackup: false,
+    clearBackup: true,
+  });
+
+  await assert.rejects(
+    queueVaultSave(Promise.resolve(), {
+      storage,
+      vault: { revision: "stale-overwrite" },
+      key: stale.key,
+      envelope: stale.envelope,
+    }),
+    /Vault ถูกเปลี่ยน/,
+  );
+
+  const unlocked = await unlockStoredVault(storage, "current-server-pin");
+  assert.equal(unlocked.vault.revision, "replacement");
+});
+
+test("unlock automatically promotes a compatible browser archive without losing the failed vault", async () => {
+  const storage = new MemoryStorage();
+  const compatible = await createVaultEnvelope(
+    { items: [{ name: "Recoverable archive" }] },
+    "current-server-pin",
+  );
+  commitVaultEnvelope(storage, compatible.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  archiveAndResetStoredVault(storage);
+
+  const incompatible = await createVaultEnvelope(
+    { items: [{ name: "Vault encrypted with an old PIN" }] },
+    "old-pin",
+  );
+  commitVaultEnvelope(storage, incompatible.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+
+  const unlocked = await unlockStoredVault(storage, "current-server-pin");
+
+  assert.equal(unlocked.recoverySource, "archive");
+  assert.equal(unlocked.vault.items[0].name, "Recoverable archive");
+  assert.deepEqual(readVaultEnvelope(storage), compatible.envelope);
+  assert.deepEqual(readVaultArchive(storage).current, incompatible.envelope);
+});
+
 test("reset archives both encrypted snapshots and restores them without decrypting", async () => {
   const password = "archived-vault-master";
   const created = await createVaultEnvelope({ items: [{ name: "Preserved" }] }, password);
