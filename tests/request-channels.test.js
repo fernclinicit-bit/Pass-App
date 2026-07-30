@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { once } from "node:events";
 import fs from "node:fs/promises";
 import http from "node:http";
+import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const require = createRequire(import.meta.url);
+const { createPinHash } = require("../pin-auth.cjs");
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -55,6 +58,8 @@ test("password requests are accepted from LINE only", async (context) => {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "passly-line-test-"));
+  const adminPin = "request-test-pin";
+  const adminPinHash = await createPinHash(adminPin);
   const lineCalls = [];
   const lineApi = http.createServer(async (req, res) => {
     let raw = "";
@@ -76,6 +81,7 @@ test("password requests are accepted from LINE only", async (context) => {
       LINE_CHANNEL_ACCESS_TOKEN: "test-line-token",
       LINE_API_BASE_URL: lineApiUrl,
       DATA_DIR: dataDir,
+      PASSLY_ADMIN_PIN_HASH: adminPinHash,
     },
     stdio: "ignore",
   });
@@ -95,6 +101,15 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.equal(health.requestChannel, "LINE");
   assert.equal(health.deliveryChannel, "LINE");
   assert.equal(health.larkInboundEnabled, false);
+  assert.equal(health.adminPinConfigured, true);
+
+  const authResponse = await fetch(`${baseUrl}/api/auth/pin`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pin: adminPin }),
+  });
+  assert.equal(authResponse.status, 200);
+  const adminCookie = authResponse.headers.get("set-cookie").split(";")[0];
 
   const larkInbound = await fetch(`${baseUrl}/api/lark/webhook`, {
     method: "POST",
@@ -145,7 +160,9 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.equal(webhookResponse.status, 200);
   assert.equal((await webhookResponse.json()).received, 1);
 
-  const requestList = await fetch(`${baseUrl}/api/requests`).then((response) => response.json());
+  const requestList = await fetch(`${baseUrl}/api/requests`, {
+    headers: { cookie: adminCookie },
+  }).then((response) => response.json());
   const lineRequest = requestList.requests[0];
   assert.equal(lineRequest.lineGroupId, "C-test-group");
   assert.equal(lineRequest.name, "LINE Test User");
@@ -153,7 +170,10 @@ test("password requests are accepted from LINE only", async (context) => {
   const shareUrl = `${baseUrl}/share.html#encrypted-payload`;
   const deliveryResponse = await fetch(`${baseUrl}/api/line/deliver`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      cookie: adminCookie,
+    },
     body: JSON.stringify({
       requestId: lineRequest.id,
       itemName: "Google Workspace",
@@ -173,7 +193,9 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.match(pushCall.body.messages[0].text, /share\.html#encrypted-payload/);
   assert.match(pushCall.body.messages[1].text, /Abc12345/);
 
-  const deliveredList = await fetch(`${baseUrl}/api/requests`).then((response) => response.json());
+  const deliveredList = await fetch(`${baseUrl}/api/requests`, {
+    headers: { cookie: adminCookie },
+  }).then((response) => response.json());
   assert.equal(deliveredList.requests[0].status, "delivered");
   assert.equal(deliveredList.requests[0].deliveryMethod, "line-secure-share");
 });

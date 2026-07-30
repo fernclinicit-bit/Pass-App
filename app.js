@@ -126,6 +126,40 @@ function downloadFile(name, content, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
+async function authenticateServerPin(pin) {
+  const response = await fetch("/api/auth/pin", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) {
+    const error = new Error(
+      result.error
+      || (response.status === 429
+        ? "ลอง PIN ไม่ถูกต้องหลายครั้ง กรุณารอสักครู่"
+        : "Server ไม่ยอมรับ PIN นี้"),
+    );
+    error.code = response.status;
+    throw error;
+  }
+  return result;
+}
+
+async function logoutServerSession() {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    // The local encrypted Vault is still locked even if Render is temporarily unavailable.
+  }
+}
+
 async function copyText(value, title = "คัดลอกแล้ว") {
   if (!navigator.clipboard?.writeText) throw new Error("เบราว์เซอร์ไม่อนุญาตให้คัดลอก");
   await navigator.clipboard.writeText(value);
@@ -330,6 +364,7 @@ async function lockVault(reason = "ออกจากระบบแล้ว", 
   } catch (error) {
     console.error("Unable to finish the final vault save before locking.", error);
   } finally {
+    await logoutServerSession();
     vault = null;
     vaultKey = null;
     detailItemId = null;
@@ -829,10 +864,14 @@ async function sendLineDelivery({ requestId, itemName, expiresAt, shareUrl, pin 
 async function checkServerConfiguration() {
   try {
     const result = await fetch("/api/health", { cache: "no-store" }).then((response) => response.json());
+    $("#serverPinStatus").textContent = result.adminPinConfigured
+      ? "PIN ผู้ดูแลถูกเก็บเป็นค่า Hash บน Server และพร้อมใช้งาน"
+      : "ยังไม่ได้ตั้งค่า PASSLY_ADMIN_PIN_HASH บน Server";
     $("#lineConfigStatus").textContent = result.lineConfigured && result.lineReplyConfigured
       ? `พร้อมใช้งาน${result.lineGroupRestricted ? " · จำกัดเฉพาะกลุ่มที่กำหนด" : ""}`
       : "ยังตั้งค่า LINE Channel บน Server ไม่ครบ";
   } catch {
+    $("#serverPinStatus").textContent = "ตรวจสอบระบบ PIN บน Server ไม่สำเร็จ";
     $("#lineConfigStatus").textContent = "ตรวจสอบ Server ไม่สำเร็จ";
   }
 }
@@ -941,6 +980,8 @@ $("#setupForm").addEventListener("submit", async (event) => {
       toast("Passly เปิดอยู่ในแท็บอื่น", "กรุณาปิดแท็บ Passly อื่นก่อนสร้าง Vault");
       return;
     }
+    button.textContent = "กำลังตรวจ PIN กับ Server…";
+    await authenticateServerPin(form.elements.password.value);
     button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
     vault = createEmptyVault();
     const result = await createVaultEnvelope(vault, form.elements.password.value);
@@ -970,6 +1011,8 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   if (lockInProgress) return;
   lockInProgress = true;
   const button = event.currentTarget.querySelector('button[type="submit"]');
+  const enteredSecret = event.currentTarget.elements.password.value;
+  let serverPinVerified = false;
   button.disabled = true;
   button.textContent = "กำลังตรวจสอบแท็บ…";
   $("#unlockError").hidden = true;
@@ -979,8 +1022,10 @@ $("#unlockForm").addEventListener("submit", async (event) => {
       $("#unlockError").hidden = false;
       return;
     }
+    button.textContent = "กำลังตรวจ PIN กับ Server…";
+    await authenticateServerPin(enteredSecret);
+    serverPinVerified = true;
     button.textContent = "กำลังถอดรหัส…";
-    const enteredSecret = event.currentTarget.elements.password.value;
     const result = await unlockStoredVault(
       localStorage,
       enteredSecret,
@@ -1008,9 +1053,11 @@ $("#unlockForm").addEventListener("submit", async (event) => {
         "Vault ใช้ SHA-512 ขนาด 64 ไบต์ร่วมกับ AES-256 แล้ว",
       );
     }
-  } catch {
+  } catch (error) {
     releaseActiveVaultTab();
-    $("#unlockError").textContent = "รหัสผ่านหรือ PIN ไม่ถูกต้อง โปรดตรวจภาษาแป้นพิมพ์และ Caps Lock";
+    $("#unlockError").textContent = serverPinVerified
+      ? "PIN ถูกต้องสำหรับ Server แต่ Vault นี้อาจสร้างด้วย PIN เดิม กรุณากู้คืน Backup หรือเก็บ Vault เดิมก่อนสร้างใหม่"
+      : error.message || "PIN ไม่ถูกต้อง";
     $("#unlockError").hidden = false;
   } finally {
     lockInProgress = false;
@@ -1233,11 +1280,15 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
   ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
+  let currentPinVerified = false;
   const button = form.querySelector("button");
   button.disabled = true;
   button.textContent = "กำลังเข้ารหัสใหม่…";
   try {
     await unlockStoredVault(localStorage, form.elements.currentPassword.value);
+    currentPinVerified = true;
+    button.textContent = "กำลังตรวจ PIN ใหม่กับ Server…";
+    await authenticateServerPin(form.elements.newPassword.value);
     await persistVault();
     addActivity("เปลี่ยนรหัสผ่าน", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
     const result = await createVaultEnvelope(vault, form.elements.newPassword.value);
@@ -1249,8 +1300,11 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
     form.reset();
     closeModal("changeMasterModal");
     toast("เปลี่ยนรหัสผ่านแล้ว", "รหัสใหม่พร้อมใช้เข้าสู่ระบบครั้งต่อไป");
-  } catch {
-    toast("เปลี่ยนไม่สำเร็จ", "รหัสผ่านหรือ PIN ปัจจุบันไม่ถูกต้อง");
+  } catch (error) {
+    toast(
+      "เปลี่ยนไม่สำเร็จ",
+      currentPinVerified ? error.message : "รหัสผ่านหรือ PIN ปัจจุบันไม่ถูกต้อง",
+    );
   } finally {
     lockInProgress = false;
     button.disabled = false;

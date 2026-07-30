@@ -2,19 +2,30 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const {
+  SESSION_TTL_MS,
+  createSessionToken,
+  verifyPinHash,
+  verifySessionToken,
+} = require('./pin-auth.cjs');
 
 const root = __dirname;
 const port = process.env.PORT || 3030;
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const requestFile = path.join(dataDir, 'requests.json');
 const lineApiBaseUrl = (process.env.LINE_API_BASE_URL || 'https://api.line.me').replace(/\/+$/, '');
+const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || '').trim();
+const adminSessionCookie = 'passly_admin_session';
+const authWindowMs = 15 * 60 * 1000;
+const authAttemptLimit = 5;
+const authAttempts = new Map();
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
 };
 
-function send(res, code, body, type = 'application/json; charset=utf-8') {
+function send(res, code, body, type = 'application/json; charset=utf-8', extraHeaders = {}) {
   res.writeHead(code, {
     'Content-Type': type,
     'Cache-Control': 'no-store',
@@ -24,6 +35,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
+    ...extraHeaders,
   });
   res.end(body);
 }
@@ -38,6 +50,146 @@ function readBody(req, limit = 50_000) {
     req.on('end', () => resolve(raw));
     req.on('error', reject);
   });
+}
+
+function parseCookies(req) {
+  const cookies = {};
+  for (const item of String(req.headers.cookie || '').split(';')) {
+    const separator = item.indexOf('=');
+    if (separator < 1) continue;
+    const name = item.slice(0, separator).trim();
+    const value = item.slice(separator + 1).trim();
+    try {
+      cookies[name] = decodeURIComponent(value);
+    } catch {
+      cookies[name] = '';
+    }
+  }
+  return cookies;
+}
+
+function clientAddress(req) {
+  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+    .split(',')[0]
+    .trim()
+    .slice(0, 120);
+}
+
+function sessionCookie(req, token, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
+  const secure = process.env.NODE_ENV === 'production'
+    || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  return [
+    `${adminSessionCookie}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${maxAgeSeconds}`,
+    secure ? 'Secure' : '',
+  ].filter(Boolean).join('; ');
+}
+
+function isAdminAuthenticated(req) {
+  if (!adminPinHash) return false;
+  return verifySessionToken(parseCookies(req)[adminSessionCookie], adminPinHash);
+}
+
+function requireAdminSession(req, res) {
+  if (!adminPinHash) {
+    send(res, 503, JSON.stringify({
+      ok: false,
+      error: 'ยังไม่ได้ตั้งค่า PIN สำหรับผู้ดูแลบน Server',
+    }));
+    return false;
+  }
+  if (!isAdminAuthenticated(req)) {
+    send(res, 401, JSON.stringify({
+      ok: false,
+      error: 'กรุณาเข้าสู่ระบบ Passly อีกครั้ง',
+    }));
+    return false;
+  }
+  return true;
+}
+
+function activeAuthAttempt(address, now = Date.now()) {
+  const state = authAttempts.get(address);
+  if (!state || state.resetAt <= now) {
+    authAttempts.delete(address);
+    return null;
+  }
+  return state;
+}
+
+function recordFailedAuth(address, now = Date.now()) {
+  const current = activeAuthAttempt(address, now) || {
+    count: 0,
+    resetAt: now + authWindowMs,
+  };
+  current.count += 1;
+  authAttempts.set(address, current);
+  if (authAttempts.size > 10_000) authAttempts.delete(authAttempts.keys().next().value);
+  return current;
+}
+
+function rateLimitResponse(res, state, now = Date.now()) {
+  const retryAfter = Math.max(1, Math.ceil((state.resetAt - now) / 1000));
+  send(
+    res,
+    429,
+    JSON.stringify({
+      ok: false,
+      error: 'ลอง PIN ไม่ถูกต้องหลายครั้ง กรุณารอสักครู่แล้วลองใหม่',
+      retryAfter,
+    }),
+    'application/json; charset=utf-8',
+    { 'Retry-After': String(retryAfter) },
+  );
+}
+
+async function handleAdminPinAuth(req, res) {
+  if (!adminPinHash) {
+    return send(res, 503, JSON.stringify({
+      ok: false,
+      error: 'ยังไม่ได้ตั้งค่า PIN สำหรับผู้ดูแลบน Server',
+    }));
+  }
+
+  const address = clientAddress(req);
+  const activeAttempt = activeAuthAttempt(address);
+  if (activeAttempt?.count >= authAttemptLimit) return rateLimitResponse(res, activeAttempt);
+
+  const data = JSON.parse(await readBody(req, 2_000) || '{}');
+  const pin = typeof data.pin === 'string' ? data.pin : '';
+  const valid = await verifyPinHash(pin, adminPinHash);
+  if (!valid) {
+    const failed = recordFailedAuth(address);
+    if (failed.count >= authAttemptLimit) return rateLimitResponse(res, failed);
+    return send(res, 401, JSON.stringify({
+      ok: false,
+      error: 'PIN ไม่ถูกต้อง',
+      attemptsRemaining: authAttemptLimit - failed.count,
+    }));
+  }
+
+  authAttempts.delete(address);
+  const token = createSessionToken(adminPinHash);
+  return send(
+    res,
+    200,
+    JSON.stringify({ ok: true, expiresIn: Math.floor(SESSION_TTL_MS / 1000) }),
+    'application/json; charset=utf-8',
+    { 'Set-Cookie': sessionCookie(req, token) },
+  );
+}
+
+function handleAdminLogout(req, res) {
+  send(
+    res,
+    200,
+    JSON.stringify({ ok: true }),
+    'application/json; charset=utf-8',
+    { 'Set-Cookie': sessionCookie(req, '', 0) },
+  );
 }
 
 function readRequests() {
@@ -311,18 +463,34 @@ async function handleLineDelivery(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (req.method === 'POST' && req.url === '/api/auth/pin') {
+      return await handleAdminPinAuth(req, res);
+    }
+    if (req.method === 'GET' && req.url === '/api/auth/status') {
+      return send(res, 200, JSON.stringify({
+        ok: true,
+        configured: Boolean(adminPinHash),
+        authenticated: isAdminAuthenticated(req),
+      }));
+    }
+    if (req.method === 'POST' && req.url === '/api/auth/logout') {
+      return handleAdminLogout(req, res);
+    }
     if (req.method === 'POST' && req.url === '/api/line/webhook') {
       return await handleLineWebhook(req, res);
     }
     if (req.method === 'GET' && req.url === '/api/requests') {
+      if (!requireAdminSession(req, res)) return;
       return send(res, 200, JSON.stringify({ requests: readRequests() }));
     }
     if (req.method === 'POST' && req.url === '/api/line/deliver') {
+      if (!requireAdminSession(req, res)) return;
       return await handleLineDelivery(req, res);
     }
     if (req.method === 'GET' && req.url === '/api/health') {
       return send(res, 200, JSON.stringify({
         ok: true,
+        adminPinConfigured: Boolean(adminPinHash),
         lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET),
         lineReplyConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
         lineGroupRestricted: Boolean(process.env.LINE_ALLOWED_GROUP_ID),
