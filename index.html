@@ -29,7 +29,7 @@
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Create encrypted vault</p>
           <h2>สร้าง Passly Vault</h2>
-          <p class="panel-copy">ตั้งรหัสผ่านหรือ PIN ระบบจะแปลงเป็น SHA-512 ขนาด 64 ไบต์ก่อนสร้างกุญแจเข้ารหัส AES-256</p>
+          <p class="panel-copy">ใช้ PIN ผู้ดูแลที่กำหนดบน Server เท่านั้น ระบบจะตรวจค่า Hash ก่อนสร้างกุญแจเข้ารหัส AES-256</p>
           <form id="setupForm">
             <label>รหัสผ่านหรือ PIN (สั้นๆ ได้)<input name="password" type="password" required minlength="4" autocomplete="new-password" placeholder="อย่างน้อย 4 ตัวอักษร" /></label>
             <label>ยืนยันรหัสผ่านหรือ PIN<input name="confirmPassword" type="password" required minlength="4" autocomplete="new-password" /></label>
@@ -42,7 +42,7 @@
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Encrypted vault</p>
           <h2>เข้าสู่ระบบ Passly</h2>
-          <p class="panel-copy">กรอกรหัสผ่านหรือ PIN รองรับช่องว่างและตัวเลขไทย/อังกฤษ ระบบจะไม่ล็อกอัตโนมัติ</p>
+          <p class="panel-copy">กรอก PIN ผู้ดูแลที่กำหนดบน Server ระบบจะตรวจค่า Hash และระบบจะไม่ล็อกอัตโนมัติ</p>
           <form id="unlockForm">
             <label>รหัสผ่านหรือ PIN<div class="input-with-actions"><input name="password" type="password" required autocomplete="current-password" autocapitalize="off" spellcheck="false" autofocus /><button type="button" id="toggleUnlockPassword">ดูรหัส</button></div></label>
             <p class="form-error" id="unlockError" hidden></p>
@@ -222,7 +222,7 @@
         <section class="view" id="view-settings" hidden>
           <div class="view-header"><div><p class="eyebrow">Vault preferences</p><h1>ตั้งค่า Passly</h1><p>ความปลอดภัย การสำรองข้อมูล การนำเข้า และช่องทางแจ้งเตือน</p></div></div>
           <div class="settings-grid">
-            <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>การเข้าสู่ระบบ</h2><p>Passly จะไม่ล็อกอัตโนมัติ ออกจากระบบได้จากปุ่มด้านซ้าย</p><button class="secondary-btn" id="changeMasterBtn">เปลี่ยนรหัสผ่านหรือ PIN</button></div></section>
+            <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>การเข้าสู่ระบบ</h2><p id="serverPinStatus">กำลังตรวจสอบ PIN ผู้ดูแลบน Server…</p><p>Passly จะไม่ล็อกอัตโนมัติ ออกจากระบบได้จากปุ่มด้านซ้าย</p><button class="secondary-btn" id="changeMasterBtn">ซิงก์ PIN ของ Vault กับ Server</button></div></section>
             <section class="settings-card"><div class="settings-icon">⇅</div><div><h2>นำเข้าและสำรองข้อมูล</h2><p>รองรับ Excel โครงสร้างเดิม, CSV, JSON และไฟล์สำรองที่เข้ารหัส</p><div class="settings-actions"><button class="secondary-btn" id="importBtn">นำเข้า Excel / CSV</button><button class="secondary-btn" id="exportVaultBtn">Export Encrypted Backup</button><button class="text-btn" id="importBackupBtn">กู้คืน Backup</button></div></div></section>
             <section class="settings-card"><div class="settings-icon">LINE</div><div><h2>LINE Request & Delivery</h2><p id="lineConfigStatus">กำลังตรวจสอบการตั้งค่าบน Server…</p><p>รับคำขอและส่งลิงก์ Passly พร้อม Share PIN กลับเข้ากลุ่ม LINE ต้นทาง</p><code>/api/line/webhook</code></div></section>
             <section class="settings-card danger-card"><div class="settings-icon">↻</div><div><h2>สร้าง Vault ใหม่</h2><p>ดาวน์โหลดและเก็บ Vault ปัจจุบันเป็น Backup เข้ารหัสก่อนเริ่ม Vault ใหม่</p><button class="secondary-btn" id="resetVaultBtn">เก็บ Vault เดิมและสร้างใหม่</button></div></section>

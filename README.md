@@ -23,8 +23,10 @@ Password Manager และระบบบริหารคำขอรหัส
 
 ## รูปแบบการเก็บข้อมูล
 
-Vault ถูกเข้ารหัสและเก็บใน `localStorage` ของเบราว์เซอร์ผู้ดูแล ข้อมูลที่ไม่ได้
-เข้ารหัสและรหัสเข้าใช้งานจะไม่ถูกส่งไปยัง Server หรือ GitHub
+Vault ถูกเข้ารหัสและเก็บใน `localStorage` ของเบราว์เซอร์ผู้ดูแล ข้อมูลใน Vault
+และ PIN จริงจะไม่ถูกบันทึกใน Server หรือ GitHub เมื่อเข้าสู่ระบบ เบราว์เซอร์จะส่ง
+PIN ผ่าน HTTPS ไปตรวจเทียบกับค่า Scrypt Hash บน Server และรับ Session Cookie
+แบบ `HttpOnly` ก่อนใช้ PIN เดียวกันถอดรหัส Vault ภายในเบราว์เซอร์
 
 กุญแจถอดรหัสอยู่ในหน่วยความจำเฉพาะเวลาที่เข้าสู่ระบบ Passly ไม่มี Auto-lock
 เมื่อกดออกจากระบบ ปิดหน้าเว็บ หรือรีโหลดหน้าเว็บ ผู้ใช้ต้องกรอกรหัสผ่านหรือ PIN ใหม่
@@ -89,6 +91,7 @@ npm test
 
 ## Environment variables
 
+- `PASSLY_ADMIN_PIN_HASH` — Scrypt Hash ของ PIN ผู้ดูแล เก็บเป็น Secret บน Render เท่านั้น
 - `LINE_CHANNEL_SECRET` — ตรวจสอบลายเซ็น LINE webhook
 - `LINE_CHANNEL_ACCESS_TOKEN` — ส่งเมนูและข้อความตอบกลับใน LINE
 - `LINE_ALLOWED_GROUP_ID` — จำกัดเฉพาะกลุ่ม “บัญชี 1”
@@ -110,6 +113,10 @@ https://YOUR-DOMAIN/api/line/webhook
 Repository มี `render.yaml` สำหรับ Render Web Service และใช้ `npm start`
 เป็นคำสั่งเริ่มระบบ ตั้งค่า Environment variables บน Render โดยไม่บันทึก
 ค่ารหัสลง GitHub
+
+`/api/requests` และ `/api/line/deliver` เปิดใช้ได้หลังตรวจ PIN สำเร็จเท่านั้น
+Server จำกัดการลอง PIN ผิดซ้ำและออก Session Cookie อายุ 12 ชั่วโมง โดยการหมดอายุ
+ของ Session ฝั่ง Server จะไม่ล็อก Vault ที่เปิดอยู่ในเบราว์เซอร์โดยอัตโนมัติ
 
 > Render Free ใช้ filesystem ชั่วคราว คำขอจาก LINE อาจถูกล้างเมื่อ service
 > restart หรือ deploy ใหม่ ส่วน Vault ในเบราว์เซอร์จะไม่ถูกล้างตาม Server

@@ -12,3 +12,5 @@ services:
         value: 22
       - key: NODE_ENV
         value: production
+      - key: PASSLY_ADMIN_PIN_HASH
+        sync: false
