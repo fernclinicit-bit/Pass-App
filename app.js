@@ -119,6 +119,30 @@ function closeModal(id) {
   if (!$$(".modal-backdrop").some((modal) => !modal.hidden)) document.body.style.overflow = "";
 }
 
+let privacyShieldTimer = null;
+
+function hasSensitiveScreenContent() {
+  if (vault && vaultKey) return true;
+  return $$('input[type="password"]').some((input) => input.value.length > 0);
+}
+
+function activatePrivacyShield(reason = "Passly ปิดทับข้อมูลเมื่อหน้าต่างไม่อยู่ด้านหน้า เพื่อช่วยป้องกันการแคปหน้าจอ") {
+  if (!hasSensitiveScreenContent() || lockInProgress) return;
+  clearTimeout(privacyShieldTimer);
+  $("#privacyShieldReason").textContent = reason;
+  $("#privacyShield").hidden = false;
+  $("#privacyShield").setAttribute("aria-hidden", "false");
+  document.body.classList.add("privacy-shield-active");
+}
+
+function deactivatePrivacyShield(force = false) {
+  if (!force && (document.hidden || !document.hasFocus())) return;
+  clearTimeout(privacyShieldTimer);
+  $("#privacyShield").hidden = true;
+  $("#privacyShield").setAttribute("aria-hidden", "true");
+  document.body.classList.remove("privacy-shield-active");
+}
+
 function downloadFile(name, content, type = "application/json") {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([content], { type }));
@@ -349,6 +373,7 @@ function setLockScreenMode() {
   $("#lockScreen").hidden = false;
   $("#mainApp").hidden = true;
   document.body.classList.remove("vault-open");
+  deactivatePrivacyShield(true);
   $("#unlockForm").elements.password.type = "password";
   $("#toggleUnlockPassword").textContent = "ดูรหัส";
   $("#restoreArchivedFromLock").hidden = !readVaultArchive(localStorage);
@@ -386,6 +411,7 @@ function afterUnlock() {
   $("#lockScreen").hidden = true;
   $("#mainApp").hidden = false;
   document.body.classList.add("vault-open");
+  if (document.hidden || !document.hasFocus()) activatePrivacyShield();
   renderAll();
   showView(activeView);
   pullLineRequests();
@@ -1750,9 +1776,30 @@ function persistBeforeSuspension() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") persistBeforeSuspension();
+  if (document.visibilityState === "hidden") {
+    activatePrivacyShield();
+    persistBeforeSuspension();
+    return;
+  }
+  privacyShieldTimer = setTimeout(() => deactivatePrivacyShield(), 180);
 });
-document.addEventListener("freeze", persistBeforeSuspension);
+document.addEventListener("freeze", () => {
+  activatePrivacyShield();
+  persistBeforeSuspension();
+});
+window.addEventListener("blur", () => activatePrivacyShield());
+window.addEventListener("focus", () => {
+  privacyShieldTimer = setTimeout(() => deactivatePrivacyShield(), 180);
+});
+window.addEventListener("beforeprint", () => {
+  activatePrivacyShield("Passly ไม่อนุญาตให้พิมพ์หรือบันทึกหน้าที่มีข้อมูลสำคัญ");
+});
+window.addEventListener("afterprint", () => deactivatePrivacyShield());
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "PrintScreen") return;
+  activatePrivacyShield("ตรวจพบคำสั่งจับภาพหน้าจอ จึงซ่อนข้อมูลสำคัญชั่วคราว");
+  privacyShieldTimer = setTimeout(() => deactivatePrivacyShield(), 1600);
+}, { capture: true });
 window.addEventListener("pagehide", persistBeforeSuspension);
 window.addEventListener("storage", (event) => {
   if (
