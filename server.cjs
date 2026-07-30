@@ -7,6 +7,7 @@ const root = __dirname;
 const port = process.env.PORT || 3030;
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const requestFile = path.join(dataDir, 'requests.json');
+const lineApiBaseUrl = (process.env.LINE_API_BASE_URL || 'https://api.line.me').replace(/\/+$/, '');
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -104,7 +105,7 @@ function lineRequestMenu() {
 async function replyLine(replyToken, messages) {
   const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!accessToken || !replyToken) return false;
-  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+  const response = await fetch(`${lineApiBaseUrl}/v2/bot/message/reply`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -119,6 +120,24 @@ async function replyLine(replyToken, messages) {
   return true;
 }
 
+async function pushLine(to, messages) {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!accessToken) throw new Error('ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN');
+  const response = await fetch(`${lineApiBaseUrl}/v2/bot/message/push`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ to, messages }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`LINE push failed: ${response.status} ${detail}`);
+  }
+  return true;
+}
+
 async function getLineMemberName(event) {
   const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   const groupId = event.source?.groupId;
@@ -126,7 +145,7 @@ async function getLineMemberName(event) {
   if (!accessToken || !groupId || !userId) return null;
   try {
     const response = await fetch(
-      `https://api.line.me/v2/bot/group/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
+      `${lineApiBaseUrl}/v2/bot/group/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
       { headers: { 'Authorization': `Bearer ${accessToken}` } },
     );
     if (!response.ok) return null;
@@ -219,23 +238,75 @@ async function handleLineWebhook(req, res) {
   send(res, 200, JSON.stringify({ ok: true, received: incoming.length }));
 }
 
-async function handleLark(req, res) {
-  const data = JSON.parse(await readBody(req) || '{}');
-  const webhook = process.env.LARK_WEBHOOK_URL || data.webhook;
-  if (!/^https:\/\/open\.larksuite\.com\/open-apis\/bot\/v2\/hook\//.test(webhook || '')) {
-    throw new Error('Lark webhook ไม่ถูกต้อง');
+function validatedShareUrl(req, value) {
+  const shareUrl = new URL(String(value || ''));
+  const expectedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  if (shareUrl.host !== expectedHost || shareUrl.pathname !== '/share.html' || !shareUrl.hash) {
+    throw new Error('ลิงก์ Passly Share ไม่ถูกต้อง');
   }
-  const response = await fetch(webhook, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ msg_type: 'text', content: { text: String(data.text || '') } }),
-  });
-  const result = await response.json();
-  if (!response.ok || (result.code && result.code !== 0)) {
-    throw new Error(result.msg || result.StatusMessage || 'Lark API error');
+  const isLoopback = shareUrl.hostname === '127.0.0.1' || shareUrl.hostname === 'localhost' || shareUrl.hostname === '::1';
+  if (process.env.NODE_ENV === 'production' && !isLoopback && shareUrl.protocol !== 'https:') {
+    throw new Error('ลิงก์ Passly Share ต้องใช้ HTTPS');
+  }
+  if (shareUrl.href.length > 4_000) throw new Error('ลิงก์ Passly Share ยาวเกินไป');
+  return shareUrl.href;
+}
 
+async function handleLineDelivery(req, res) {
+  const data = JSON.parse(await readBody(req) || '{}');
+  const requests = readRequests();
+  const request = requests.find((item) => item.id === String(data.requestId || ''));
+  if (!request || request.source !== 'LINE') {
+    return send(res, 404, JSON.stringify({ ok: false, error: 'ไม่พบคำขอ LINE นี้ กรุณาให้ผู้ใช้ส่งคำขอใหม่' }));
   }
-  send(res, 200, JSON.stringify({ ok: true }));
+
+  const groupId = String(request.lineGroupId || '');
+  const allowedGroupId = process.env.LINE_ALLOWED_GROUP_ID;
+  if (!groupId.startsWith('C') || (allowedGroupId && groupId !== allowedGroupId)) {
+    return send(res, 403, JSON.stringify({ ok: false, error: 'กลุ่ม LINE ของคำขอนี้ไม่ได้รับอนุญาต' }));
+  }
+
+  const pin = String(data.pin || '').trim();
+  const itemName = String(data.itemName || request.system || 'บัญชีที่ร้องขอ').trim().slice(0, 100);
+  const expiresAt = new Date(data.expiresAt);
+  if (!/^[A-Za-z0-9]{4,32}$/.test(pin)) throw new Error('Share PIN ไม่ถูกต้อง');
+  if (!itemName) throw new Error('ไม่พบชื่อรายการที่จะแจก');
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date() || expiresAt > new Date(Date.now() + 86_700_000)) {
+    throw new Error('วันหมดอายุของลิงก์ไม่ถูกต้อง');
+  }
+
+  const shareUrl = validatedShareUrl(req, data.shareUrl);
+  const expiryText = new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Bangkok',
+  }).format(expiresAt);
+  const linkMessage = [
+    '[Passly] ข้อมูลเข้าใช้งานพร้อมแล้ว',
+    `ผู้รับ: ${request.name}`,
+    `ระบบ: ${itemName}`,
+    `หมดอายุ: ${expiryText}`,
+    `เปิดข้อมูล: ${shareUrl}`,
+  ].join('\n');
+  const pinMessage = [
+    `[Passly] Share PIN: ${pin}`,
+    `สำหรับคำขอ ${itemName}`,
+    'ใช้ PIN นี้เปิดลิงก์ Passly ในข้อความก่อนหน้า',
+  ].join('\n');
+  if (linkMessage.length > 5_000 || pinMessage.length > 5_000) {
+    throw new Error('ข้อความ LINE ยาวเกินขีดจำกัด');
+  }
+
+  await pushLine(groupId, [
+    { type: 'text', text: linkMessage },
+    { type: 'text', text: pinMessage },
+  ]);
+
+  request.status = 'delivered';
+  request.deliveredAt = new Date().toISOString();
+  request.deliveryMethod = 'line-secure-share';
+  writeRequests(requests);
+  send(res, 200, JSON.stringify({ ok: true, deliveredTo: 'LINE' }));
 }
 
 const server = http.createServer(async (req, res) => {
@@ -246,8 +317,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/api/requests') {
       return send(res, 200, JSON.stringify({ requests: readRequests() }));
     }
-    if (req.method === 'POST' && req.url === '/api/lark') {
-      return await handleLark(req, res);
+    if (req.method === 'POST' && req.url === '/api/line/deliver') {
+      return await handleLineDelivery(req, res);
     }
     if (req.method === 'GET' && req.url === '/api/health') {
       return send(res, 200, JSON.stringify({
@@ -256,8 +327,9 @@ const server = http.createServer(async (req, res) => {
         lineReplyConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
         lineGroupRestricted: Boolean(process.env.LINE_ALLOWED_GROUP_ID),
         requestChannel: 'LINE',
+        deliveryChannel: 'LINE',
         larkInboundEnabled: false,
-        larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
+        larkConfigured: false,
       }));
     }
 
