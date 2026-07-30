@@ -59,9 +59,6 @@ let generatorType = "password";
 let generatedValue = "";
 let detailItemId = null;
 let shareResult = null;
-let lockTimer = null;
-let lockDeadline = null;
-let countdownTimer = null;
 let lineInterval = null;
 let linePollReady = false;
 let lockInProgress = false;
@@ -158,7 +155,6 @@ function createEmptyVault() {
     generatorHistory: [],
     activity: [{ id: crypto.randomUUID(), action: "สร้าง Vault", detail: "เริ่มต้น Passly Vault แบบเข้ารหัส", at: nowIso() }],
     settings: {
-      lockTimeout: 5,
       larkWebhook: legacyLark.webhook || "",
       larkPrefix: legacyLark.prefix || "[Passly] ข้อมูลเข้าใช้งาน",
     },
@@ -174,7 +170,6 @@ function migrateVaultData(data) {
   data.generatorHistory ||= [];
   data.activity ||= [];
   data.settings ||= {};
-  data.settings.lockTimeout ||= 5;
   data.settings.larkPrefix ||= "[Passly] ข้อมูลเข้าใช้งาน";
   data.settings.larkWebhook ||= "";
   return data;
@@ -285,16 +280,11 @@ function setLockScreenMode() {
   setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
 }
 
-async function lockVault(reason = "ล็อก Vault แล้ว", { save = true } = {}) {
+async function lockVault(reason = "ออกจากระบบแล้ว", { save = true } = {}) {
   if (lockInProgress) return;
   lockInProgress = true;
-  clearTimeout(lockTimer);
-  clearInterval(countdownTimer);
   clearInterval(lineInterval);
-  lockTimer = null;
-  countdownTimer = null;
   lineInterval = null;
-  lockDeadline = null;
 
   try {
     if (save && vault && vaultKey) await persistVault();
@@ -310,36 +300,8 @@ async function lockVault(reason = "ล็อก Vault แล้ว", { save = tr
     setLockScreenMode();
     $("#unlockError").hidden = true;
     lockInProgress = false;
-    if (reason) toast("Vault ถูกล็อก", reason);
+    if (reason) toast("ออกจากระบบ Passly", reason);
   }
-}
-
-function armLockTimer() {
-  if (!vault || !lockDeadline) return;
-  clearTimeout(lockTimer);
-  clearInterval(countdownTimer);
-  const remainingMs = lockDeadline - Date.now();
-  if (remainingMs <= 0) {
-    lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด");
-    return;
-  }
-  lockTimer = setTimeout(
-    () => lockVault("ไม่มีการใช้งานตามเวลาที่กำหนด"),
-    remainingMs,
-  );
-  const updateCountdown = () => {
-    const remaining = Math.max(0, Math.ceil((lockDeadline - Date.now()) / 60_000));
-    $("#autoLockText").textContent = `ล็อกอัตโนมัติใน ${remaining} นาที`;
-  };
-  updateCountdown();
-  countdownTimer = setInterval(updateCountdown, 30_000);
-}
-
-function resetLockTimer() {
-  if (!vault) return;
-  const minutes = Number(vault.settings.lockTimeout || 5);
-  lockDeadline = Date.now() + minutes * 60_000;
-  armLockTimer();
 }
 
 function afterUnlock() {
@@ -347,12 +309,10 @@ function afterUnlock() {
   $("#lockScreen").hidden = true;
   $("#mainApp").hidden = false;
   document.body.classList.add("vault-open");
-  $("#lockTimeout").value = String(vault.settings.lockTimeout || 5);
   $("#larkWebhook").value = vault.settings.larkWebhook || "";
   $("#larkPrefix").value = vault.settings.larkPrefix || "[Passly] ข้อมูลเข้าใช้งาน";
   renderAll();
   showView(activeView);
-  resetLockTimer();
   pullLineRequests();
   clearInterval(lineInterval);
   lineInterval = setInterval(pullLineRequests, 5000);
@@ -632,14 +592,14 @@ function openItemEditor(itemId = null, preset = {}) {
   setTimeout(() => form.elements.name.focus(), 60);
 }
 
-async function verifyMasterPassword(message = "ยืนยัน Master Password เพื่อเปิดข้อมูลนี้") {
+async function verifyMasterPassword(message = "ยืนยันรหัสผ่านเพื่อเปิดข้อมูลนี้") {
   const password = prompt(message);
   if (password === null) return false;
   try {
     await unlockStoredVault(localStorage, password);
     return true;
   } catch {
-    toast("ยืนยันไม่สำเร็จ", "Master Password ไม่ถูกต้อง");
+    toast("ยืนยันไม่สำเร็จ", "รหัสผ่านหรือ PIN ไม่ถูกต้อง");
     return false;
   }
 }
@@ -922,7 +882,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
   if (
     normalizeMasterPassword(form.elements.password.value)
     !== normalizeMasterPassword(form.elements.confirmPassword.value)
-  ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยัน Master Password อีกครั้ง");
+  ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยันรหัสผ่านหรือ PIN อีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
   const button = form.querySelector("button[type=submit]");
@@ -973,11 +933,11 @@ $("#unlockForm").addEventListener("submit", async (event) => {
       );
     }
   } catch {
-    $("#unlockError").textContent = "Master Password ไม่ถูกต้อง โปรดตรวจภาษาแป้นพิมพ์และ Caps Lock";
+    $("#unlockError").textContent = "รหัสผ่านหรือ PIN ไม่ถูกต้อง โปรดตรวจภาษาแป้นพิมพ์และ Caps Lock";
     $("#unlockError").hidden = false;
   } finally {
     button.disabled = false;
-    button.innerHTML = 'ปลดล็อก Vault <span>→</span>';
+    button.innerHTML = 'เข้าสู่ระบบ <span>→</span>';
   }
 });
 
@@ -1063,7 +1023,7 @@ $("#deliverForm").addEventListener("submit", async (event) => {
   const request = requests.find((entry) => entry.id === form.elements.requestId.value);
   const item = vault.items.find((entry) => entry.id === form.elements.itemId.value);
   if (!request || !item) return;
-  if (item.reprompt && !await verifyMasterPassword("ยืนยัน Master Password ก่อนสร้างลิงก์แจกข้อมูล")) return;
+  if (item.reprompt && !await verifyMasterPassword("ยืนยันรหัสผ่านก่อนสร้างลิงก์แจกข้อมูล")) return;
   const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
   const pin = form.elements.pin.value;
   const encryptedFragment = await createSharePayload({
@@ -1166,15 +1126,13 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
   ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
-  clearTimeout(lockTimer);
-  clearInterval(countdownTimer);
   const button = form.querySelector("button");
   button.disabled = true;
   button.textContent = "กำลังเข้ารหัสใหม่…";
   try {
     await unlockStoredVault(localStorage, form.elements.currentPassword.value);
     await persistVault();
-    addActivity("เปลี่ยน Master Password", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
+    addActivity("เปลี่ยนรหัสผ่าน", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
     const result = await createVaultEnvelope(vault, form.elements.newPassword.value);
     vaultKey = result.key;
     commitVaultEnvelope(localStorage, result.envelope, {
@@ -1183,14 +1141,13 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
     });
     form.reset();
     closeModal("changeMasterModal");
-    toast("เปลี่ยน Master Password แล้ว", "Vault ถูกเข้ารหัสใหม่เรียบร้อย");
+    toast("เปลี่ยนรหัสผ่านแล้ว", "รหัสใหม่พร้อมใช้เข้าสู่ระบบครั้งต่อไป");
   } catch {
-    toast("เปลี่ยนไม่สำเร็จ", "Master Password ปัจจุบันไม่ถูกต้อง");
+    toast("เปลี่ยนไม่สำเร็จ", "รหัสผ่านหรือ PIN ปัจจุบันไม่ถูกต้อง");
   } finally {
     lockInProgress = false;
-    if (vault) resetLockTimer();
     button.disabled = false;
-    button.textContent = "เข้ารหัส Vault ใหม่";
+    button.textContent = "บันทึกรหัสใหม่";
   }
 });
 
@@ -1407,7 +1364,7 @@ document.addEventListener("click", async (event) => {
 
 $("#newItemBtn").addEventListener("click", () => openItemEditor());
 $("#menuBtn").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
-$("#lockVaultBtn").addEventListener("click", () => lockVault("ผู้ดูแลกดล็อก Vault"));
+$("#lockVaultBtn").addEventListener("click", () => lockVault("ผู้ดูแลกดออกจากระบบ"));
 $("#themeBtn").addEventListener("click", () => {
   document.body.classList.toggle("dark");
   localStorage.setItem(THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
@@ -1506,7 +1463,7 @@ $("#exportVaultBtn").addEventListener("click", async () => {
   downloadFile(`passly-encrypted-backup-${todayIso()}.json`, JSON.stringify(envelope, null, 2));
   addActivity("Export Backup", "ดาวน์โหลดไฟล์สำรองที่เข้ารหัส");
   persistVault();
-  toast("ดาวน์โหลด Backup แล้ว", "ไฟล์ยังคงเข้ารหัสด้วย Master Password");
+  toast("ดาวน์โหลด Backup แล้ว", "ไฟล์ยังคงเข้ารหัสด้วยรหัสผ่านหรือ PIN");
 });
 $("#importBackupBtn").addEventListener("click", () => $("#backupFileInput").click());
 $("#backupFileInput").addEventListener("change", async (event) => {
@@ -1518,7 +1475,7 @@ $("#backupFileInput").addEventListener("change", async (event) => {
     if (!isVaultEnvelope(envelope)) throw new Error("ไม่ใช่ Passly encrypted backup");
     if (!confirm("กู้คืน Backup นี้และแทนที่ Vault ปัจจุบันใช่หรือไม่?")) return;
     commitVaultEnvelope(localStorage, envelope);
-    lockVault("กรอก Master Password ของ Backup เพื่อเปิด Vault", { save: false });
+    lockVault("กรอกรหัสผ่านหรือ PIN ของ Backup เพื่อเปิด Vault", { save: false });
   } catch (error) {
     toast("กู้คืนไม่สำเร็จ", error.message);
   }
@@ -1530,13 +1487,6 @@ $("#exportActivityBtn").addEventListener("click", () => {
   downloadFile(`passly-activity-${todayIso()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
 });
 
-$("#lockTimeout").addEventListener("change", async (event) => {
-  vault.settings.lockTimeout = Number(event.target.value);
-  addActivity("เปลี่ยน Auto-lock", `${event.target.value} นาที`);
-  await persistVault();
-  resetLockTimer();
-  toast("บันทึก Auto-lock แล้ว", `${event.target.value} นาที`);
-});
 $("#saveLarkBtn").addEventListener("click", async () => {
   vault.settings.larkWebhook = $("#larkWebhook").value.trim();
   vault.settings.larkPrefix = $("#larkPrefix").value.trim() || "[Passly] ข้อมูลเข้าใช้งาน";
@@ -1575,23 +1525,11 @@ function persistBeforeSuspension() {
   });
 }
 
-function resumeVaultSession() {
-  if (!vault || lockInProgress) return;
-  if (lockDeadline && Date.now() >= lockDeadline) {
-    lockVault("ระบบถูกพักหรือไม่มีการใช้งานตามเวลาที่กำหนด");
-    return;
-  }
-  armLockTimer();
-}
-
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistBeforeSuspension();
-  else resumeVaultSession();
 });
 document.addEventListener("freeze", persistBeforeSuspension);
-document.addEventListener("resume", resumeVaultSession);
 window.addEventListener("pagehide", persistBeforeSuspension);
-window.addEventListener("pageshow", resumeVaultSession);
 window.addEventListener("storage", (event) => {
   if (
     vault
@@ -1601,10 +1539,6 @@ window.addEventListener("storage", (event) => {
     lockVault("Vault ถูกอัปเดตจากแท็บอื่น กรุณาปลดล็อกอีกครั้ง", { save: false });
   }
 });
-
-["pointerdown", "keydown", "touchstart"].forEach((eventName) => document.addEventListener(eventName, () => {
-  if (vault) resetLockTimer();
-}, { passive: true }));
 
 $("#today").textContent = new Intl.DateTimeFormat("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
 if (localStorage.getItem(THEME_KEY) === "dark") document.body.classList.add("dark");

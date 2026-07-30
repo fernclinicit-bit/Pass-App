@@ -21,7 +21,7 @@
         <h1>รหัสทุกบัญชี<br><span>อยู่ในที่เดียว</span></h1>
         <p>Vault เข้ารหัสบนอุปกรณ์ จัดหมวดหมู่ ตรวจรหัสซ้ำ และแจกข้อมูลผ่านลิงก์ Passly ที่ป้องกันด้วย PIN</p>
         <div class="lock-features">
-          <span>✓ AES-GCM 256-bit</span><span>✓ Master Password</span><span>✓ Auto-lock</span>
+          <span>✓ AES-GCM 256-bit</span><span>✓ รหัสผ่านหรือ PIN</span><span>✓ ไม่ล็อกอัตโนมัติ</span>
         </div>
       </div>
       <div class="unlock-card">
@@ -29,24 +29,24 @@
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Create encrypted vault</p>
           <h2>สร้าง Passly Vault</h2>
-          <p class="panel-copy">ตั้ง Master Password สำหรับเข้ารหัสข้อมูลบนเบราว์เซอร์นี้ Passly จะไม่บันทึกรหัสนี้</p>
+          <p class="panel-copy">ตั้งรหัสผ่านหรือ PIN สำหรับเข้าสู่ระบบ Passly ครั้งต่อไป ข้อมูลยังคงเข้ารหัสบนเบราว์เซอร์นี้</p>
           <form id="setupForm">
             <label>รหัสผ่านหรือ PIN (สั้นๆ ได้)<input name="password" type="password" required minlength="4" autocomplete="new-password" placeholder="อย่างน้อย 4 ตัวอักษร" /></label>
             <label>ยืนยันรหัสผ่านหรือ PIN<input name="confirmPassword" type="password" required minlength="4" autocomplete="new-password" /></label>
             <div class="master-meter"><i id="masterMeter"></i></div>
-            <label class="check-row"><input name="acknowledge" type="checkbox" required /><span>ฉันเข้าใจว่าหากลืม Master Password จะไม่สามารถถอดรหัส Vault ได้</span></label>
+            <label class="check-row"><input name="acknowledge" type="checkbox" required /><span>ฉันเข้าใจว่าหากลืมรหัสผ่านหรือ PIN จะไม่สามารถเปิดข้อมูลใน Vault ได้</span></label>
             <button class="primary-btn full" type="submit">สร้าง Vault ที่เข้ารหัส <span>→</span></button>
           </form>
         </div>
         <div id="unlockPanel" hidden>
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Encrypted vault</p>
-          <h2>ปลดล็อก Passly</h2>
-          <p class="panel-copy">ข้อมูลยังคงเข้ารหัสจนกว่าจะกรอก Master Password ที่ถูกต้อง</p>
+          <h2>เข้าสู่ระบบ Passly</h2>
+          <p class="panel-copy">กรอกรหัสผ่านหรือ PIN เพื่อเข้าใช้งาน ระบบจะไม่ล็อกอัตโนมัติ</p>
           <form id="unlockForm">
-            <label>Master Password<input name="password" type="password" required autocomplete="current-password" autofocus /></label>
+            <label>รหัสผ่านหรือ PIN<input name="password" type="password" required autocomplete="current-password" autofocus /></label>
             <p class="form-error" id="unlockError" hidden></p>
-            <button class="primary-btn full" type="submit">ปลดล็อก Vault <span>→</span></button>
+            <button class="primary-btn full" type="submit">เข้าสู่ระบบ <span>→</span></button>
           </form>
           <button class="text-btn danger-text" id="resetFromLock" type="button">ลบ Vault บนอุปกรณ์นี้</button>
         </div>
@@ -73,8 +73,8 @@
         <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> ตั้งค่า</button>
       </nav>
       <div class="sidebar-bottom">
-        <div class="vault-state"><div><span class="pulse-dot"></span><strong>Vault ปลดล็อกอยู่</strong></div><small id="autoLockText">ล็อกอัตโนมัติใน 5 นาที</small></div>
-        <button class="lock-btn" id="lockVaultBtn" type="button"><span>⌁</span> ล็อก Vault</button>
+        <div class="vault-state"><div><span class="pulse-dot"></span><strong>เข้าสู่ระบบอยู่</strong></div><small>ไม่ล็อกอัตโนมัติ</small></div>
+        <button class="lock-btn" id="lockVaultBtn" type="button"><span>⌁</span> ออกจากระบบ</button>
         <div class="user-card"><span class="avatar">FN</span><span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span></div>
       </div>
     </aside>
@@ -221,13 +221,13 @@
         <section class="view" id="view-settings" hidden>
           <div class="view-header"><div><p class="eyebrow">Vault preferences</p><h1>ตั้งค่า Passly</h1><p>ความปลอดภัย การสำรองข้อมูล การนำเข้า และช่องทางแจ้งเตือน</p></div></div>
           <div class="settings-grid">
-            <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>ความปลอดภัยของ Vault</h2><p>กำหนดเวลาล็อกอัตโนมัติและเปลี่ยน Master Password</p><label>ล็อกอัตโนมัติเมื่อไม่มีการใช้งาน<select id="lockTimeout"><option value="1">1 นาที</option><option value="5">5 นาที</option><option value="15">15 นาที</option><option value="30">30 นาที</option><option value="60">1 ชั่วโมง</option></select></label><button class="secondary-btn" id="changeMasterBtn">เปลี่ยน Master Password</button></div></section>
+            <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>การเข้าสู่ระบบ</h2><p>Passly จะไม่ล็อกอัตโนมัติ ออกจากระบบได้จากปุ่มด้านซ้าย</p><button class="secondary-btn" id="changeMasterBtn">เปลี่ยนรหัสผ่านหรือ PIN</button></div></section>
             <section class="settings-card"><div class="settings-icon">⇅</div><div><h2>นำเข้าและสำรองข้อมูล</h2><p>รองรับ Excel โครงสร้างเดิม, CSV, JSON และไฟล์สำรองที่เข้ารหัส</p><div class="settings-actions"><button class="secondary-btn" id="importBtn">นำเข้า Excel / CSV</button><button class="secondary-btn" id="exportVaultBtn">Export Encrypted Backup</button><button class="text-btn" id="importBackupBtn">กู้คืน Backup</button></div></div></section>
             <section class="settings-card"><div class="settings-icon">LINE</div><div><h2>LINE Request</h2><p id="lineConfigStatus">กำลังตรวจสอบการตั้งค่าบน Server…</p><code>/api/line/webhook</code></div></section>
             <section class="settings-card"><div class="settings-icon">LARK</div><div><h2>Lark Chat · ส่งข้อมูลเท่านั้น</h2><p>ไม่รับคำขอจาก Lark ใช้สำหรับส่งลิงก์ Passly Share หลังอนุมัติเท่านั้น ส่วน PIN ให้ส่งผ่านอีกช่องทาง</p><label>Custom Bot Webhook<input id="larkWebhook" type="password" placeholder="เว้นว่างหากตั้งบน Server แล้ว" autocomplete="off" /></label><label>คำขึ้นต้นข้อความ<input id="larkPrefix" value="[Passly] ข้อมูลเข้าใช้งาน" /></label><button class="secondary-btn" id="saveLarkBtn">บันทึกใน Vault</button></div></section>
             <section class="settings-card danger-card"><div class="settings-icon">!</div><div><h2>ลบ Vault บนอุปกรณ์นี้</h2><p>ลบข้อมูลเข้ารหัส การตั้งค่า และประวัติทั้งหมดอย่างถาวร</p><button class="danger-btn" id="resetVaultBtn">ลบ Passly Vault</button></div></section>
           </div>
-          <div class="architecture-note"><strong>รูปแบบการเก็บข้อมูลในเวอร์ชันนี้</strong><p>Vault ถูกเข้ารหัสและเก็บเฉพาะในเบราว์เซอร์ของผู้ดูแลเครื่องนี้ จึงยังไม่ซิงก์รหัสข้ามอุปกรณ์และไม่ส่ง Master Password ไปยัง Server</p></div>
+          <div class="architecture-note"><strong>รูปแบบการเก็บข้อมูลในเวอร์ชันนี้</strong><p>Vault ถูกเข้ารหัสและเก็บเฉพาะในเบราว์เซอร์ของผู้ดูแลเครื่องนี้ จึงยังไม่ซิงก์รหัสข้ามอุปกรณ์และไม่ส่งรหัสเข้าใช้งานไปยัง Server</p></div>
         </section>
       </div>
     </main>
@@ -261,7 +261,7 @@
         <div class="field-row"><label>Folder<select name="folderId" id="itemFolderSelect"><option value="">ไม่มี Folder</option></select></label><label>Collection<select name="collectionId" id="itemCollectionSelect"><option value="">My Vault</option></select></label></div>
         <div class="field-row"><label>Owner<input name="owner" placeholder="เช่น Marketing / IT" /></label><label class="check-row top-gap"><input name="favorite" type="checkbox" /><span>เพิ่มใน Favorites</span></label></div>
         <label>หมายเหตุ<textarea name="notes" rows="3"></textarea></label>
-        <label class="check-row"><input name="reprompt" type="checkbox" /><span>ให้ยืนยัน Master Password ก่อนเปิดดูหรือคัดลอก</span></label>
+        <label class="check-row"><input name="reprompt" type="checkbox" /><span>ให้ยืนยันรหัสผ่านก่อนเปิดดูหรือคัดลอก</span></label>
         <div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal="itemModal">ยกเลิก</button><button class="primary-btn" type="submit">บันทึกแบบเข้ารหัส</button></div>
       </form>
     </section>
@@ -294,7 +294,7 @@
   </div>
 
   <div class="modal-backdrop" id="changeMasterModal" hidden>
-    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="changeMasterModal">×</button><p class="eyebrow">Re-encrypt vault</p><h2>เปลี่ยน Master Password</h2><form id="changeMasterForm"><label>Master Password ปัจจุบัน<input name="currentPassword" type="password" required /></label><label>Master Password ใหม่<input name="newPassword" type="password" required minlength="4" /></label><label>ยืนยันรหัสใหม่<input name="confirmPassword" type="password" required minlength="4" /></label><button class="primary-btn full" type="submit">เข้ารหัส Vault ใหม่</button></form></section>
+    <section class="modal" role="dialog" aria-modal="true"><button class="modal-close" data-close-modal="changeMasterModal">×</button><p class="eyebrow">Update login password</p><h2>เปลี่ยนรหัสผ่านหรือ PIN</h2><form id="changeMasterForm"><label>รหัสปัจจุบัน<input name="currentPassword" type="password" required /></label><label>รหัสใหม่<input name="newPassword" type="password" required minlength="4" /></label><label>ยืนยันรหัสใหม่<input name="confirmPassword" type="password" required minlength="4" /></label><button class="primary-btn full" type="submit">บันทึกรหัสใหม่</button></form></section>
   </div>
 
   <div class="toast" id="toast"><span>✓</span><div><strong id="toastTitle">บันทึกแล้ว</strong><small id="toastMessage"></small></div></div>
