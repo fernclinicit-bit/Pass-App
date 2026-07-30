@@ -34,10 +34,20 @@ test("login targets the submit button and allows only one active tab", () => {
   assert.match(appSource, /navigator\.locks\.request/);
   assert.match(appSource, /Passly เปิดใช้งานอยู่ในแท็บอื่น/);
   assert.match(pageSource, /id="resetFromLock"/);
+  assert.match(pageSource, /id="resetVaultModal"/);
+  assert.match(pageSource, /id="resetVaultForm"/);
   assert.match(pageSource, /id="restoreArchivedFromLock"/);
   assert.match(pageSource, /id="restoreFromLock"/);
   assert.match(pageSource, /เก็บ Vault เดิมและสร้างใหม่/);
   assert.match(appSource, /readVaultArchive\(localStorage\)/);
+  assert.match(appSource, /openResetVaultConfirmation/);
+  const resetConfirmationStart = appSource.indexOf("function openResetVaultConfirmation()");
+  const resetConfirmationEnd = appSource.indexOf(
+    '$("#resetVaultForm").addEventListener',
+    resetConfirmationStart,
+  );
+  const resetConfirmationSource = appSource.slice(resetConfirmationStart, resetConfirmationEnd);
+  assert.doesNotMatch(resetConfirmationSource, /\bprompt\(/);
 });
 
 test("vault creation snapshots one PIN before asynchronous server verification", () => {
