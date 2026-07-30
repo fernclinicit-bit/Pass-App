@@ -43,8 +43,11 @@ test("privacy shield hides an unlocked vault when capture-related focus is lost"
 test("login targets the submit button and allows only one active tab", () => {
   assert.match(
     appSource,
-    /event\.currentTarget\.querySelector\('button\[type="submit"\]'\)/,
+    /const form = event\.currentTarget;/,
   );
+  assert.match(appSource, /form\.querySelector\('button\[type="submit"\]'\)/);
+  assert.match(appSource, /form\.reset\(\);/);
+  assert.doesNotMatch(appSource, /event\.currentTarget\.reset\(\);/);
   assert.match(appSource, /navigator\.locks\.request/);
   assert.match(appSource, /Passly เปิดใช้งานอยู่ในแท็บอื่น/);
   assert.match(pageSource, /id="resetFromLock"/);
