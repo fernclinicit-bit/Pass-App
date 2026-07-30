@@ -1076,8 +1076,9 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (lockInProgress) return;
   lockInProgress = true;
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  const secretInput = event.currentTarget.elements.password;
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const secretInput = form.elements.password;
   const enteredSecret = secretInput.value;
   let serverPinVerified = false;
   secretInput.disabled = true;
@@ -1110,7 +1111,7 @@ $("#unlockForm").addEventListener("submit", async (event) => {
       commitVaultEnvelope(localStorage, upgraded.envelope);
       securityUpgraded = true;
     }
-    event.currentTarget.reset();
+    form.reset();
     afterUnlock();
     if (result.repairError) {
       toast(
