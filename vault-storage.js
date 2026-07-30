@@ -220,11 +220,22 @@ export async function unlockStoredVault(storage, password) {
   if (current) {
     try {
       const result = await unlockCompatibleEnvelope(current, password);
-      storage.setItem(VAULT_RECOVERY_STORAGE_KEY, JSON.stringify(current));
-      if (!backup) {
-        storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(current));
+      let repairError = null;
+      try {
+        storage.setItem(VAULT_RECOVERY_STORAGE_KEY, JSON.stringify(current));
+        if (!backup) {
+          storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(current));
+        }
+      } catch (error) {
+        repairError = error;
+        console.warn("Vault opened, but redundant snapshots could not be refreshed.", error);
       }
-      return { ...result, envelope: current, recovered: false };
+      return {
+        ...result,
+        envelope: current,
+        recovered: false,
+        repairError,
+      };
     } catch (error) {
       currentError = error;
     }
@@ -233,14 +244,21 @@ export async function unlockStoredVault(storage, password) {
   if (backup) {
     try {
       const result = await unlockCompatibleEnvelope(backup, password);
-      commitVaultEnvelope(storage, backup, {
-        preserveCurrentAsBackup: false,
-      });
+      let repairError = null;
+      try {
+        commitVaultEnvelope(storage, backup, {
+          preserveCurrentAsBackup: false,
+        });
+      } catch (error) {
+        repairError = error;
+        console.warn("Backup opened, but it could not be promoted.", error);
+      }
       return {
         ...result,
         envelope: backup,
         recovered: true,
         recoverySource: "backup",
+        repairError,
       };
     } catch (error) {
       currentError ||= error;
@@ -255,6 +273,7 @@ export async function unlockStoredVault(storage, password) {
       const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
       const archiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
       const recoveryRaw = storage.getItem(VAULT_RECOVERY_STORAGE_KEY);
+      let repairError = null;
       try {
         commitVaultEnvelope(storage, recovery, {
           preserveCurrentAsBackup: false,
@@ -272,13 +291,15 @@ export async function unlockStoredVault(storage, password) {
         else storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, archiveRaw);
         if (recoveryRaw === null) storage.removeItem(VAULT_RECOVERY_STORAGE_KEY);
         else storage.setItem(VAULT_RECOVERY_STORAGE_KEY, recoveryRaw);
-        throw error;
+        repairError = error;
+        console.warn("Recovery snapshot opened, but storage repair could not finish.", error);
       }
       return {
         ...result,
         envelope: recovery,
         recovered: true,
         recoverySource: "recovery",
+        repairError,
       };
     } catch (error) {
       currentError ||= error;
@@ -300,6 +321,7 @@ export async function unlockStoredVault(storage, password) {
         const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
         const archiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
         const recoveryRaw = storage.getItem(VAULT_RECOVERY_STORAGE_KEY);
+        let repairError = null;
         try {
           restoreVaultArchive(storage, archive);
           commitVaultEnvelope(storage, candidate, {
@@ -317,13 +339,15 @@ export async function unlockStoredVault(storage, password) {
           else storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, archiveRaw);
           if (recoveryRaw === null) storage.removeItem(VAULT_RECOVERY_STORAGE_KEY);
           else storage.setItem(VAULT_RECOVERY_STORAGE_KEY, recoveryRaw);
-          throw error;
+          repairError = error;
+          console.warn("Archive opened, but storage repair could not finish.", error);
         }
         return {
           ...result,
           envelope: candidate,
           recovered: true,
           recoverySource: "archive",
+          repairError,
         };
       } catch (error) {
         currentError ||= error;

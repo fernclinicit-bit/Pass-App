@@ -51,6 +51,17 @@ class MemoryStorage {
   }
 }
 
+class RecoveryWriteFailureStorage extends MemoryStorage {
+  rejectRecoveryWrites = false;
+
+  setItem(key, value) {
+    if (this.rejectRecoveryWrites && key === VAULT_RECOVERY_STORAGE_KEY) {
+      throw new Error("Storage quota reached");
+    }
+    super.setItem(key, value);
+  }
+}
+
 test("new vaults unlock with canonically equivalent Unicode master passwords", async () => {
   const vault = { items: [{ name: "LINE Account 1" }] };
   const created = await createVaultEnvelope(vault, "Cafe\u0301-รหัสผ่าน-ปลอดภัย");
@@ -167,6 +178,23 @@ test("a damaged current snapshot is restored from the encrypted backup", async (
   assert.deepEqual(unlocked.vault, vault);
   assert.equal(unlocked.recovered, true);
   assert.deepEqual(readVaultEnvelope(storage), created.envelope);
+});
+
+test("a valid vault still unlocks when refreshing redundant storage fails", async () => {
+  const password = "storage-repair-failure-master";
+  const vault = { items: [{ name: "Still accessible" }] };
+  const created = await createVaultEnvelope(vault, password);
+  const storage = new RecoveryWriteFailureStorage();
+  commitVaultEnvelope(storage, created.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  storage.rejectRecoveryWrites = true;
+
+  const unlocked = await unlockStoredVault(storage, password);
+
+  assert.deepEqual(unlocked.vault, vault);
+  assert.equal(unlocked.recovered, false);
+  assert.match(unlocked.repairError.message, /quota/i);
 });
 
 test("queued saves retain their encryption key when the session locks", async () => {
