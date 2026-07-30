@@ -12,6 +12,9 @@ if (!globalThis.atob) {
 
 const {
   KDF_ITERATIONS,
+  MASTER_PASSWORD_NORMALIZATION,
+  VAULT_SECRET_CANONICALIZATION,
+  VAULT_SECRET_ENCODING,
   bytesToBase64,
   createVaultEnvelope,
   deriveVaultKey,
@@ -55,6 +58,42 @@ test("new vaults unlock with canonically equivalent Unicode master passwords", a
   assert.deepEqual(unlocked.vault, vault);
   assert.equal(unlocked.recovered, false);
   assert.equal(created.envelope.passwordNormalization, "NFKC");
+  assert.equal(created.envelope.secretCanonicalization, VAULT_SECRET_CANONICALIZATION);
+  assert.equal(created.envelope.secretEncoding, VAULT_SECRET_ENCODING);
+});
+
+test("new 64-byte login encoding treats formatted Thai and ASCII PINs consistently", async () => {
+  const vault = { items: [{ name: "PIN protected" }] };
+  const created = await createVaultEnvelope(vault, " ๑๒๓-๔๕๖ ");
+  const storage = new MemoryStorage();
+  commitVaultEnvelope(storage, created.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+
+  const unlocked = await unlockStoredVault(storage, "123 456");
+
+  assert.deepEqual(unlocked.vault, vault);
+  assert.equal(unlocked.envelope.secretEncoding, "SHA-512-64-BYTE");
+});
+
+test("existing normalized vaults retry trimmed and Thai-digit PIN forms", async () => {
+  const vault = { items: [{ name: "Existing PIN vault" }] };
+  const salt = randomBytes(16);
+  const key = await deriveVaultKey("123456", salt, KDF_ITERATIONS);
+  const envelope = await encryptVault(vault, key, {
+    salt: bytesToBase64(salt),
+    iterations: KDF_ITERATIONS,
+    passwordNormalization: MASTER_PASSWORD_NORMALIZATION,
+  });
+  const storage = new MemoryStorage();
+  commitVaultEnvelope(storage, envelope, {
+    preserveCurrentAsBackup: false,
+  });
+
+  const unlocked = await unlockStoredVault(storage, " ๑๒๓-๔๕๖ ");
+
+  assert.deepEqual(unlocked.vault, vault);
+  assert.equal(unlocked.recovered, false);
 });
 
 test("legacy vaults try compatible Unicode forms without changing their encryption", async () => {
