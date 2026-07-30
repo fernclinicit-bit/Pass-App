@@ -24,6 +24,7 @@ import {
   readVaultEnvelope,
   restoreVaultArchive,
   unlockStoredVault,
+  vaultEnvelopeIdentity,
 } from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
 
@@ -59,6 +60,7 @@ const pageTitles = {
 
 let vault = null;
 let vaultKey = null;
+let vaultEnvelope = null;
 let saveQueue = Promise.resolve();
 let activeView = "dashboard";
 let vaultFilter = "all";
@@ -275,9 +277,10 @@ function migrateVaultData(data) {
 }
 
 async function persistVault() {
-  if (!vault || !vaultKey) return saveQueue;
-  const envelopeForSave = getStoredEnvelope();
+  if (!vault || !vaultKey || !vaultEnvelope) return saveQueue;
+  const envelopeForSave = structuredClone(vaultEnvelope);
   if (!envelopeForSave) throw new Error("ไม่พบโครงสร้าง Vault");
+  const sessionIdentity = vaultEnvelopeIdentity(envelopeForSave);
 
   saveQueue = queueVaultSave(saveQueue, {
     storage: localStorage,
@@ -286,6 +289,11 @@ async function persistVault() {
     envelope: envelopeForSave,
     onPreviousError: (error) => {
       console.error("Previous vault save failed; retrying with the latest snapshot.", error);
+    },
+    onCommitted: (nextEnvelope) => {
+      if (vaultEnvelopeIdentity(vaultEnvelope) === sessionIdentity) {
+        vaultEnvelope = nextEnvelope;
+      }
     },
   });
   return saveQueue;
@@ -397,6 +405,7 @@ async function lockVault(reason = "ออกจากระบบแล้ว", 
     await logoutServerSession();
     vault = null;
     vaultKey = null;
+    vaultEnvelope = null;
     detailItemId = null;
     shareResult = null;
     $$(".modal-backdrop").forEach((modal) => { modal.hidden = true; });
@@ -1040,6 +1049,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
     vault = createEmptyVault();
     const result = await createVaultEnvelope(vault, enteredSecret);
     vaultKey = result.key;
+    vaultEnvelope = result.envelope;
     commitVaultEnvelope(localStorage, result.envelope, {
       preserveCurrentAsBackup: false,
       clearBackup: true,
@@ -1052,6 +1062,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
     releaseActiveVaultTab();
     vault = null;
     vaultKey = null;
+    vaultEnvelope = null;
     toast("สร้าง Vault ไม่สำเร็จ", error.message);
   } finally {
     lockInProgress = false;
@@ -1091,15 +1102,22 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     let securityUpgraded = false;
     if (result.envelope.secretEncoding === VAULT_SECRET_ENCODING) {
       vaultKey = result.key;
+      vaultEnvelope = result.envelope;
     } else {
       const upgraded = await createVaultEnvelope(vault, enteredSecret);
       vaultKey = upgraded.key;
+      vaultEnvelope = upgraded.envelope;
       commitVaultEnvelope(localStorage, upgraded.envelope);
       securityUpgraded = true;
     }
     event.currentTarget.reset();
     afterUnlock();
-    if (result.recovered) {
+    if (result.recoverySource === "archive") {
+      toast(
+        "กู้คืน Vault จาก Archive สำเร็จ",
+        "ระบบเปิด Vault รุ่นที่ใช้ PIN ปัจจุบันได้ และเก็บ Vault ที่เปิดไม่ได้ไว้เป็น Archive แทนแล้ว",
+      );
+    } else if (result.recovered) {
       toast(
         "กู้คืน Vault สำเร็จ",
         "ระบบใช้ Snapshot สำรองก่อน Sleep และซ่อมข้อมูลที่บันทึกล่าสุดให้แล้ว",
@@ -1359,6 +1377,7 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
     addActivity("เปลี่ยนรหัสผ่าน", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
     const result = await createVaultEnvelope(vault, newSecret);
     vaultKey = result.key;
+    vaultEnvelope = result.envelope;
     commitVaultEnvelope(localStorage, result.envelope, {
       preserveCurrentAsBackup: false,
       clearBackup: true,
@@ -1743,6 +1762,7 @@ async function resetVaultStorage() {
   archiveAndResetStoredVault(localStorage);
   vault = null;
   vaultKey = null;
+  vaultEnvelope = null;
   releaseActiveVaultTab();
   location.reload();
 }

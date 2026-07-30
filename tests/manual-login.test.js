@@ -77,6 +77,15 @@ test("vault creation snapshots one PIN before asynchronous server verification",
     /createVaultEnvelope\(vault, form\.elements\.password\.value\)/,
   );
   assert.match(setupSource, /input\.disabled = true/);
+  assert.match(appSource, /let vaultEnvelope = null/);
+  assert.match(appSource, /const envelopeForSave = structuredClone\(vaultEnvelope\)/);
+  assert.doesNotMatch(
+    appSource.slice(
+      appSource.indexOf("async function persistVault()"),
+      appSource.indexOf("function addActivity"),
+    ),
+    /getStoredEnvelope\(\)/,
+  );
 });
 
 test("PIN rotation snapshots current and new values before asynchronous work", () => {
