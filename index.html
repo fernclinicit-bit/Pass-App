@@ -21,7 +21,7 @@
         <h1>รหัสทุกบัญชี<br><span>อยู่ในที่เดียว</span></h1>
         <p>Vault เข้ารหัสบนอุปกรณ์ จัดหมวดหมู่ ตรวจรหัสซ้ำ และแจกข้อมูลผ่านลิงก์ Passly ที่ป้องกันด้วย PIN</p>
         <div class="lock-features">
-          <span>✓ AES-GCM 256-bit</span><span>✓ รหัสผ่านหรือ PIN</span><span>✓ ไม่ล็อกอัตโนมัติ</span>
+          <span>✓ AES-GCM 256-bit</span><span>✓ SHA-512 · 64-byte</span><span>✓ ไม่ล็อกอัตโนมัติ</span>
         </div>
       </div>
       <div class="unlock-card">
@@ -29,7 +29,7 @@
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Create encrypted vault</p>
           <h2>สร้าง Passly Vault</h2>
-          <p class="panel-copy">ตั้งรหัสผ่านหรือ PIN สำหรับเข้าสู่ระบบ Passly ครั้งต่อไป ข้อมูลยังคงเข้ารหัสบนเบราว์เซอร์นี้</p>
+          <p class="panel-copy">ตั้งรหัสผ่านหรือ PIN ระบบจะแปลงเป็น SHA-512 ขนาด 64 ไบต์ก่อนสร้างกุญแจเข้ารหัส AES-256</p>
           <form id="setupForm">
             <label>รหัสผ่านหรือ PIN (สั้นๆ ได้)<input name="password" type="password" required minlength="4" autocomplete="new-password" placeholder="อย่างน้อย 4 ตัวอักษร" /></label>
             <label>ยืนยันรหัสผ่านหรือ PIN<input name="confirmPassword" type="password" required minlength="4" autocomplete="new-password" /></label>
@@ -42,15 +42,15 @@
           <span class="security-mark">⌁</span>
           <p class="eyebrow">Encrypted vault</p>
           <h2>เข้าสู่ระบบ Passly</h2>
-          <p class="panel-copy">กรอกรหัสผ่านหรือ PIN เพื่อเข้าใช้งาน ระบบจะไม่ล็อกอัตโนมัติ</p>
+          <p class="panel-copy">กรอกรหัสผ่านหรือ PIN รองรับช่องว่างและตัวเลขไทย/อังกฤษ ระบบจะไม่ล็อกอัตโนมัติ</p>
           <form id="unlockForm">
-            <label>รหัสผ่านหรือ PIN<input name="password" type="password" required autocomplete="current-password" autofocus /></label>
+            <label>รหัสผ่านหรือ PIN<div class="input-with-actions"><input name="password" type="password" required autocomplete="current-password" autocapitalize="off" spellcheck="false" autofocus /><button type="button" id="toggleUnlockPassword">ดูรหัส</button></div></label>
             <p class="form-error" id="unlockError" hidden></p>
             <button class="primary-btn full" type="submit">เข้าสู่ระบบ <span>→</span></button>
           </form>
           <button class="text-btn danger-text" id="resetFromLock" type="button">ลบ Vault บนอุปกรณ์นี้</button>
         </div>
-        <div class="encryption-foot"><span class="pulse-dot"></span> เข้ารหัสก่อนบันทึก · กุญแจอยู่ในหน่วยความจำเท่านั้น</div>
+        <div class="encryption-foot"><span class="pulse-dot"></span> SHA-512 64-byte + AES-256 · กุญแจอยู่ในหน่วยความจำเท่านั้น</div>
       </div>
     </div>
   </section>

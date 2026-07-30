@@ -1,9 +1,11 @@
 import {
   VAULT_STORAGE_KEY,
+  VAULT_SECRET_ENCODING,
   createSharePayload,
   createVaultEnvelope,
   generatePassphrase,
   generatePassword,
+  normalizeVaultSecret,
   passwordScore,
   sha256Reference,
 } from "./vault-crypto.js";
@@ -24,7 +26,6 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const nowIso = () => new Date().toISOString();
 const todayIso = () => nowIso().slice(0, 10);
-const normalizeMasterPassword = (value) => value.normalize("NFKC");
 const typeMeta = {
   login: { label: "Login", icon: "⌁" },
   note: { label: "Secure Note", icon: "▤" },
@@ -277,6 +278,8 @@ function setLockScreenMode() {
   $("#lockScreen").hidden = false;
   $("#mainApp").hidden = true;
   document.body.classList.remove("vault-open");
+  $("#unlockForm").elements.password.type = "password";
+  $("#toggleUnlockPassword").textContent = "ดูรหัส";
   setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
 }
 
@@ -888,8 +891,8 @@ $("#setupForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (
-    normalizeMasterPassword(form.elements.password.value)
-    !== normalizeMasterPassword(form.elements.confirmPassword.value)
+    normalizeVaultSecret(form.elements.password.value)
+    !== normalizeVaultSecret(form.elements.confirmPassword.value)
   ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยันรหัสผ่านหรือ PIN อีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
@@ -926,18 +929,32 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   button.textContent = "กำลังถอดรหัส…";
   $("#unlockError").hidden = true;
   try {
+    const enteredSecret = event.currentTarget.elements.password.value;
     const result = await unlockStoredVault(
       localStorage,
-      event.currentTarget.elements.password.value,
+      enteredSecret,
     );
-    vaultKey = result.key;
     vault = migrateVaultData(result.vault);
+    let securityUpgraded = false;
+    if (result.envelope.secretEncoding === VAULT_SECRET_ENCODING) {
+      vaultKey = result.key;
+    } else {
+      const upgraded = await createVaultEnvelope(vault, enteredSecret);
+      vaultKey = upgraded.key;
+      commitVaultEnvelope(localStorage, upgraded.envelope);
+      securityUpgraded = true;
+    }
     event.currentTarget.reset();
     afterUnlock();
     if (result.recovered) {
       toast(
         "กู้คืน Vault สำเร็จ",
         "ระบบใช้ Snapshot สำรองก่อน Sleep และซ่อมข้อมูลที่บันทึกล่าสุดให้แล้ว",
+      );
+    } else if (securityUpgraded) {
+      toast(
+        "อัปเกรดระบบล็อกแล้ว",
+        "Vault ใช้ SHA-512 ขนาด 64 ไบต์ร่วมกับ AES-256 แล้ว",
       );
     }
   } catch {
@@ -1158,8 +1175,8 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (
-    normalizeMasterPassword(form.elements.newPassword.value)
-    !== normalizeMasterPassword(form.elements.confirmPassword.value)
+    normalizeVaultSecret(form.elements.newPassword.value)
+    !== normalizeVaultSecret(form.elements.confirmPassword.value)
   ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
@@ -1434,6 +1451,11 @@ $("#vaultFilters").addEventListener("click", (event) => {
 $("#requestSearch").addEventListener("input", renderRequests);
 $("#requestStatusFilter").addEventListener("change", renderRequests);
 
+$("#toggleUnlockPassword").addEventListener("click", () => {
+  const input = $("#unlockForm").elements.password;
+  input.type = input.type === "password" ? "text" : "password";
+  $("#toggleUnlockPassword").textContent = input.type === "password" ? "ดูรหัส" : "ซ่อนรหัส";
+});
 $("#toggleItemPassword").addEventListener("click", () => {
   const input = $("#itemForm").elements.password;
   input.type = input.type === "password" ? "text" : "password";

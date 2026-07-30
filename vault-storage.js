@@ -85,14 +85,20 @@ function legacyPasswordCandidates(password) {
       trimmed.normalize("NFKD"),
     );
   }
+  for (const candidate of [...candidates]) {
+    const normalized = candidate.normalize("NFKC").trim();
+    if (/^[0-9๐-๙\s-]+$/.test(normalized)) {
+      candidates.push(
+        normalized
+          .replace(/[๐-๙]/g, (digit) => String("๐๑๒๓๔๕๖๗๘๙".indexOf(digit)))
+          .replace(/[\s-]/g, ""),
+      );
+    }
+  }
   return [...new Set(candidates)];
 }
 
 async function unlockCompatibleEnvelope(envelope, password) {
-  if (envelope.passwordNormalization) {
-    return unlockVaultEnvelope(envelope, password);
-  }
-
   let lastError;
   for (const candidate of legacyPasswordCandidates(password)) {
     try {
