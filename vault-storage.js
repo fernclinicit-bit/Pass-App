@@ -6,6 +6,7 @@ import {
 
 export const VAULT_BACKUP_STORAGE_KEY = "passly-encrypted-vault-backup-v1";
 export const VAULT_ARCHIVE_STORAGE_KEY = "passly-encrypted-vault-archive-v1";
+export const VAULT_RECOVERY_STORAGE_KEY = "passly-encrypted-vault-recovery-v1";
 
 export function isVaultEnvelope(value) {
   return Boolean(
@@ -105,11 +106,18 @@ export function restoreVaultArchive(storage, archive) {
 export function commitVaultEnvelope(
   storage,
   envelope,
-  { preserveCurrentAsBackup = true, clearBackup = false } = {},
+  {
+    preserveCurrentAsBackup = true,
+    clearBackup = false,
+    updateRecovery = true,
+  } = {},
 ) {
   if (!isVaultEnvelope(envelope)) throw new Error("รูปแบบ Vault ไม่ถูกต้อง");
 
   const current = readVaultEnvelope(storage);
+  if (updateRecovery) {
+    storage.setItem(VAULT_RECOVERY_STORAGE_KEY, JSON.stringify(envelope));
+  }
   if (clearBackup) {
     storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
   } else if (preserveCurrentAsBackup && current) {
@@ -122,6 +130,7 @@ export function commitVaultEnvelope(
 export function removeStoredVault(storage) {
   storage.removeItem(VAULT_STORAGE_KEY);
   storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
+  storage.removeItem(VAULT_RECOVERY_STORAGE_KEY);
 }
 
 export function queueVaultSave(
@@ -204,12 +213,14 @@ async function unlockCompatibleEnvelope(envelope, password) {
 export async function unlockStoredVault(storage, password) {
   const current = readVaultEnvelope(storage);
   const backup = readVaultEnvelope(storage, VAULT_BACKUP_STORAGE_KEY);
+  const recovery = readVaultEnvelope(storage, VAULT_RECOVERY_STORAGE_KEY);
   const archive = readVaultArchive(storage);
   let currentError;
 
   if (current) {
     try {
       const result = await unlockCompatibleEnvelope(current, password);
+      storage.setItem(VAULT_RECOVERY_STORAGE_KEY, JSON.stringify(current));
       if (!backup) {
         storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(current));
       }
@@ -236,9 +247,47 @@ export async function unlockStoredVault(storage, password) {
     }
   }
 
+  if (recovery) {
+    try {
+      const result = await unlockCompatibleEnvelope(recovery, password);
+      const failedArchive = current || backup ? createVaultArchive(storage) : null;
+      const currentRaw = storage.getItem(VAULT_STORAGE_KEY);
+      const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
+      const archiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
+      const recoveryRaw = storage.getItem(VAULT_RECOVERY_STORAGE_KEY);
+      try {
+        commitVaultEnvelope(storage, recovery, {
+          preserveCurrentAsBackup: false,
+          clearBackup: true,
+        });
+        if (failedArchive) {
+          storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(failedArchive));
+        }
+      } catch (error) {
+        if (currentRaw === null) storage.removeItem(VAULT_STORAGE_KEY);
+        else storage.setItem(VAULT_STORAGE_KEY, currentRaw);
+        if (backupRaw === null) storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
+        else storage.setItem(VAULT_BACKUP_STORAGE_KEY, backupRaw);
+        if (archiveRaw === null) storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
+        else storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, archiveRaw);
+        if (recoveryRaw === null) storage.removeItem(VAULT_RECOVERY_STORAGE_KEY);
+        else storage.setItem(VAULT_RECOVERY_STORAGE_KEY, recoveryRaw);
+        throw error;
+      }
+      return {
+        ...result,
+        envelope: recovery,
+        recovered: true,
+        recoverySource: "recovery",
+      };
+    } catch (error) {
+      currentError ||= error;
+    }
+  }
+
   if (archive) {
     const attempted = new Set(
-      [current, backup]
+      [current, backup, recovery]
         .filter(Boolean)
         .map((envelope) => JSON.stringify(envelope)),
     );
@@ -250,13 +299,12 @@ export async function unlockStoredVault(storage, password) {
         const currentRaw = storage.getItem(VAULT_STORAGE_KEY);
         const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
         const archiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
+        const recoveryRaw = storage.getItem(VAULT_RECOVERY_STORAGE_KEY);
         try {
           restoreVaultArchive(storage, archive);
-          if (candidate !== archive.current) {
-            commitVaultEnvelope(storage, candidate, {
-              preserveCurrentAsBackup: false,
-            });
-          }
+          commitVaultEnvelope(storage, candidate, {
+            preserveCurrentAsBackup: false,
+          });
           if (failedArchive) {
             storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(failedArchive));
           }
@@ -267,6 +315,8 @@ export async function unlockStoredVault(storage, password) {
           else storage.setItem(VAULT_BACKUP_STORAGE_KEY, backupRaw);
           if (archiveRaw === null) storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
           else storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, archiveRaw);
+          if (recoveryRaw === null) storage.removeItem(VAULT_RECOVERY_STORAGE_KEY);
+          else storage.setItem(VAULT_RECOVERY_STORAGE_KEY, recoveryRaw);
           throw error;
         }
         return {
@@ -281,6 +331,6 @@ export async function unlockStoredVault(storage, password) {
     }
   }
 
-  if (!current && !backup) throw new Error("ไม่พบ Vault ที่บันทึกไว้");
+  if (!current && !backup && !recovery) throw new Error("ไม่พบ Vault ที่บันทึกไว้");
   throw currentError || new Error("ไม่สามารถถอดรหัส Vault ได้");
 }

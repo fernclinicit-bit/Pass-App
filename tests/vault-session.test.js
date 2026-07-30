@@ -24,6 +24,7 @@ const {
 const {
   VAULT_ARCHIVE_STORAGE_KEY,
   VAULT_BACKUP_STORAGE_KEY,
+  VAULT_RECOVERY_STORAGE_KEY,
   archiveAndResetStoredVault,
   commitVaultEnvelope,
   isVaultArchive,
@@ -217,6 +218,43 @@ test("a stale tab cannot combine its old key with a replacement vault envelope",
 
   const unlocked = await unlockStoredVault(storage, "current-server-pin");
   assert.equal(unlocked.vault.revision, "replacement");
+});
+
+test("an independent recovery snapshot survives writes from a legacy browser tab", async () => {
+  const storage = new MemoryStorage();
+  const password = "current-server-pin";
+  const importedItems = Array.from({ length: 62 }, (_, index) => ({
+    name: `Imported ${index + 1}`,
+    saved: true,
+  }));
+  const created = await createVaultEnvelope({ items: [] }, password);
+  commitVaultEnvelope(storage, created.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  await queueVaultSave(Promise.resolve(), {
+    storage,
+    vault: { items: importedItems },
+    key: created.key,
+    envelope: created.envelope,
+  });
+  const recoveryBeforeLegacyWrite = readVaultEnvelope(
+    storage,
+    VAULT_RECOVERY_STORAGE_KEY,
+  );
+
+  const legacy = await createVaultEnvelope(
+    { items: [{ name: "Legacy tab overwrite" }] },
+    "old-pin",
+  );
+  storage.setItem("passly-encrypted-vault-v1", JSON.stringify(legacy.envelope));
+  storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(legacy.envelope));
+
+  const unlocked = await unlockStoredVault(storage, password);
+
+  assert.equal(unlocked.recoverySource, "recovery");
+  assert.deepEqual(unlocked.vault.items, importedItems);
+  assert.deepEqual(readVaultEnvelope(storage), recoveryBeforeLegacyWrite);
+  assert.deepEqual(readVaultArchive(storage).current, legacy.envelope);
 });
 
 test("unlock automatically promotes a compatible browser archive without losing the failed vault", async () => {

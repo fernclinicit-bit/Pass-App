@@ -1112,7 +1112,12 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     }
     event.currentTarget.reset();
     afterUnlock();
-    if (result.recoverySource === "archive") {
+    if (result.recoverySource === "recovery") {
+      toast(
+        "กู้คืน Vault จาก Recovery Snapshot สำเร็จ",
+        "ระบบซ่อม Vault ที่ถูกแท็บเก่าเขียนทับ และเปิดข้อมูลล่าสุดให้แล้ว",
+      );
+    } else if (result.recoverySource === "archive") {
       toast(
         "กู้คืน Vault จาก Archive สำเร็จ",
         "ระบบเปิด Vault รุ่นที่ใช้ PIN ปัจจุบันได้ และเก็บ Vault ที่เปิดไม่ได้ไว้เป็น Archive แทนแล้ว",
