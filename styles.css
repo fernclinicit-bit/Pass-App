@@ -64,6 +64,7 @@ input:focus, textarea:focus, select:focus { border-color: #9bae59; box-shadow: 0
 .encryption-foot { margin: 22px -34px -34px; padding: 14px 34px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
 .pulse-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #7ea52a; box-shadow: 0 0 0 4px rgba(126,165,42,.12); }
 .form-error { color: var(--red); font-size: 11px; }
+.field-help { color: var(--muted); font-size: 9px; font-weight: 400; }
 
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; width: 250px; display: flex; flex-direction: column; padding: 28px 17px 20px; overflow-y: auto; background: var(--sidebar); color: #fff; }

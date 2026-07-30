@@ -1,4 +1,5 @@
 import {
+  MAX_SHARE_EXPIRY_MS,
   VAULT_STORAGE_KEY,
   VAULT_SECRET_ENCODING,
   createSharePayload,
@@ -7,7 +8,9 @@ import {
   generatePassword,
   normalizeVaultSecret,
   passwordScore,
+  resolveShareExpiry,
   sha256Reference,
+  toLocalDatetimeValue,
 } from "./vault-crypto.js";
 import {
   VAULT_BACKUP_STORAGE_KEY,
@@ -778,6 +781,24 @@ function updateDeliverySubmitButton() {
     : 'คัดลอกข้อความ <span>→</span>';
 }
 
+function syncCustomExpiryControl(resetValue = false) {
+  const form = $("#deliverForm");
+  const input = form.elements.customExpiryAt;
+  const custom = form.elements.expiry.value === "custom";
+  const now = new Date();
+  const earliest = new Date(now.getTime() + 60_000);
+  const latest = new Date(now.getTime() + MAX_SHARE_EXPIRY_MS);
+  $("#customExpiryField").hidden = !custom;
+  input.required = custom;
+  input.min = toLocalDatetimeValue(earliest);
+  input.max = toLocalDatetimeValue(latest);
+  if (resetValue || (custom && !input.value)) {
+    const suggested = new Date(now.getTime() + 3_600_000);
+    suggested.setSeconds(0, 0);
+    input.value = toLocalDatetimeValue(suggested);
+  }
+}
+
 async function openDeliverForRequest(requestId, presetItemId = null) {
   const request = requests.find((entry) => entry.id === requestId);
   const items = loginItems();
@@ -795,6 +816,7 @@ async function openDeliverForRequest(requestId, presetItemId = null) {
   const match = presetItemId || items.find((item) => item.name.toLowerCase().includes(request.system.toLowerCase()) || request.system.toLowerCase().includes(item.name.toLowerCase()))?.id;
   if (match) form.elements.itemId.value = match;
   form.elements.pin.value = generateSharePin();
+  syncCustomExpiryControl(true);
   updateDeliverySubmitButton();
   openModal("deliverModal");
 }
@@ -1190,7 +1212,10 @@ $("#deliverForm").addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   submitButton.textContent = channel === "line" ? "กำลังส่งเข้า LINE…" : "กำลังคัดลอก…";
   try {
-    const expiresAt = new Date(Date.now() + Number(form.elements.expiry.value) * 3_600_000).toISOString();
+    const expiresAt = resolveShareExpiry(
+      form.elements.expiry.value,
+      form.elements.customExpiryAt.value,
+    );
     const pin = form.elements.pin.value;
     const encryptedFragment = await createSharePayload({
       title: item.name,
@@ -1758,6 +1783,7 @@ $("#resetFromLock").addEventListener("click", openResetVaultConfirmation);
 
 $("#regenerateSharePin").addEventListener("click", () => { $("#deliverForm").elements.pin.value = generateSharePin(); });
 $("#deliveryChannel").addEventListener("change", updateDeliverySubmitButton);
+$("#deliveryExpiry").addEventListener("change", () => syncCustomExpiryControl());
 $("#copyShareMessage").addEventListener("click", () => shareResult && copyText(shareResult.message, "คัดลอกข้อความแล้ว"));
 $("#copySharePin").addEventListener("click", () => shareResult && copyText(shareResult.pin, "คัดลอก PIN แล้ว"));
 $("#refreshSecurity").addEventListener("click", () => { renderSecurity(); toast("สแกน Vault แล้ว", "การตรวจสอบทำบนอุปกรณ์นี้"); });

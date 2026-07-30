@@ -18,6 +18,7 @@ const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || '').trim();
 const adminSessionCookie = 'passly_admin_session';
 const authWindowMs = 15 * 60 * 1000;
 const authAttemptLimit = 5;
+const maxShareExpiryMs = 30 * 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -423,8 +424,8 @@ async function handleLineDelivery(req, res) {
   const expiresAt = new Date(data.expiresAt);
   if (!/^[A-Za-z0-9]{4,32}$/.test(pin)) throw new Error('Share PIN ไม่ถูกต้อง');
   if (!itemName) throw new Error('ไม่พบชื่อรายการที่จะแจก');
-  if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date() || expiresAt > new Date(Date.now() + 86_700_000)) {
-    throw new Error('วันหมดอายุของลิงก์ไม่ถูกต้อง');
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date() || expiresAt > new Date(Date.now() + maxShareExpiryMs)) {
+    throw new Error('วันหมดอายุของลิงก์ต้องอยู่ในอนาคตและไม่เกิน 30 วัน');
   }
 
   const shareUrl = validatedShareUrl(req, data.shareUrl);
