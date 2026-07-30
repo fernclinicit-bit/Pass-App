@@ -48,7 +48,8 @@
             <p class="form-error" id="unlockError" hidden></p>
             <button class="primary-btn full" type="submit">เข้าสู่ระบบ <span>→</span></button>
           </form>
-          <button class="text-btn danger-text" id="resetFromLock" type="button">ลบ Vault บนอุปกรณ์นี้</button>
+          <button class="text-btn" id="resetFromLock" type="button">เก็บ Vault เดิมและสร้างใหม่</button>
+          <button class="text-btn" id="restoreFromLock" type="button">กู้คืนไฟล์ Backup</button>
         </div>
         <div class="encryption-foot"><span class="pulse-dot"></span> SHA-512 64-byte + AES-256 · กุญแจอยู่ในหน่วยความจำเท่านั้น</div>
       </div>
@@ -224,7 +225,7 @@
             <section class="settings-card"><div class="settings-icon">⌁</div><div><h2>การเข้าสู่ระบบ</h2><p>Passly จะไม่ล็อกอัตโนมัติ ออกจากระบบได้จากปุ่มด้านซ้าย</p><button class="secondary-btn" id="changeMasterBtn">เปลี่ยนรหัสผ่านหรือ PIN</button></div></section>
             <section class="settings-card"><div class="settings-icon">⇅</div><div><h2>นำเข้าและสำรองข้อมูล</h2><p>รองรับ Excel โครงสร้างเดิม, CSV, JSON และไฟล์สำรองที่เข้ารหัส</p><div class="settings-actions"><button class="secondary-btn" id="importBtn">นำเข้า Excel / CSV</button><button class="secondary-btn" id="exportVaultBtn">Export Encrypted Backup</button><button class="text-btn" id="importBackupBtn">กู้คืน Backup</button></div></div></section>
             <section class="settings-card"><div class="settings-icon">LINE</div><div><h2>LINE Request & Delivery</h2><p id="lineConfigStatus">กำลังตรวจสอบการตั้งค่าบน Server…</p><p>รับคำขอและส่งลิงก์ Passly พร้อม Share PIN กลับเข้ากลุ่ม LINE ต้นทาง</p><code>/api/line/webhook</code></div></section>
-            <section class="settings-card danger-card"><div class="settings-icon">!</div><div><h2>ลบ Vault บนอุปกรณ์นี้</h2><p>ลบข้อมูลเข้ารหัส การตั้งค่า และประวัติทั้งหมดอย่างถาวร</p><button class="danger-btn" id="resetVaultBtn">ลบ Passly Vault</button></div></section>
+            <section class="settings-card danger-card"><div class="settings-icon">↻</div><div><h2>สร้าง Vault ใหม่</h2><p>ดาวน์โหลดและเก็บ Vault ปัจจุบันเป็น Backup เข้ารหัสก่อนเริ่ม Vault ใหม่</p><button class="secondary-btn" id="resetVaultBtn">เก็บ Vault เดิมและสร้างใหม่</button></div></section>
           </div>
           <div class="architecture-note"><strong>รูปแบบการเก็บข้อมูลในเวอร์ชันนี้</strong><p>Vault ถูกเข้ารหัสและเก็บเฉพาะในเบราว์เซอร์ของผู้ดูแลเครื่องนี้ จึงยังไม่ซิงก์รหัสข้ามอุปกรณ์และไม่ส่งรหัสเข้าใช้งานไปยัง Server</p></div>
         </section>

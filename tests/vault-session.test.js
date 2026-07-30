@@ -22,10 +22,14 @@ const {
   randomBytes,
 } = await import("../vault-crypto.js");
 const {
+  VAULT_ARCHIVE_STORAGE_KEY,
   VAULT_BACKUP_STORAGE_KEY,
+  archiveAndResetStoredVault,
   commitVaultEnvelope,
+  isVaultArchive,
   queueVaultSave,
   readVaultEnvelope,
+  restoreVaultArchive,
   unlockStoredVault,
 } = await import("../vault-storage.js");
 
@@ -165,4 +169,24 @@ test("queued saves retain their encryption key when the session locks", async ()
 
   const unlocked = await unlockStoredVault(storage, password);
   assert.equal(unlocked.vault.revision, 2);
+});
+
+test("reset archives both encrypted snapshots and restores them without decrypting", async () => {
+  const password = "archived-vault-master";
+  const created = await createVaultEnvelope({ items: [{ name: "Preserved" }] }, password);
+  const storage = new MemoryStorage();
+  commitVaultEnvelope(storage, created.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  storage.setItem(VAULT_BACKUP_STORAGE_KEY, JSON.stringify(created.envelope));
+
+  const archive = archiveAndResetStoredVault(storage);
+
+  assert.equal(readVaultEnvelope(storage), null);
+  assert.equal(readVaultEnvelope(storage, VAULT_BACKUP_STORAGE_KEY), null);
+  assert.equal(isVaultArchive(JSON.parse(storage.getItem(VAULT_ARCHIVE_STORAGE_KEY))), true);
+
+  restoreVaultArchive(storage, archive);
+  const unlocked = await unlockStoredVault(storage, password);
+  assert.equal(unlocked.vault.items[0].name, "Preserved");
 });
