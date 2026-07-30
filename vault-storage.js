@@ -39,6 +39,15 @@ export function isVaultArchive(value) {
   );
 }
 
+export function readVaultArchive(storage) {
+  try {
+    const archive = JSON.parse(storage.getItem(VAULT_ARCHIVE_STORAGE_KEY) || "null");
+    return isVaultArchive(archive) ? archive : null;
+  } catch {
+    return null;
+  }
+}
+
 export function createVaultArchive(storage) {
   const archive = {
     format: "passly-encrypted-vault-archive",
@@ -56,12 +65,15 @@ export function archiveAndResetStoredVault(storage) {
   const currentRaw = storage.getItem(VAULT_STORAGE_KEY);
   const backupRaw = storage.getItem(VAULT_BACKUP_STORAGE_KEY);
   const previousArchiveRaw = storage.getItem(VAULT_ARCHIVE_STORAGE_KEY);
+  const previousArchive = readVaultArchive(storage);
 
   storage.removeItem(VAULT_STORAGE_KEY);
   storage.removeItem(VAULT_BACKUP_STORAGE_KEY);
-  storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
   try {
-    storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(archive));
+    if (!previousArchive) {
+      storage.removeItem(VAULT_ARCHIVE_STORAGE_KEY);
+      storage.setItem(VAULT_ARCHIVE_STORAGE_KEY, JSON.stringify(archive));
+    }
   } catch (error) {
     if (currentRaw !== null) storage.setItem(VAULT_STORAGE_KEY, currentRaw);
     if (backupRaw !== null) storage.setItem(VAULT_BACKUP_STORAGE_KEY, backupRaw);

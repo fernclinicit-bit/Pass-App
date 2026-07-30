@@ -28,6 +28,7 @@ const {
   commitVaultEnvelope,
   isVaultArchive,
   queueVaultSave,
+  readVaultArchive,
   readVaultEnvelope,
   restoreVaultArchive,
   unlockStoredVault,
@@ -78,6 +79,30 @@ test("new 64-byte login encoding treats formatted Thai and ASCII PINs consistent
 
   assert.deepEqual(unlocked.vault, vault);
   assert.equal(unlocked.envelope.secretEncoding, "SHA-512-64-BYTE");
+});
+
+test("a PIN captured before async verification survives form-value changes and logout save", async () => {
+  const formState = { password: "246810" };
+  const capturedPin = formState.password;
+  await Promise.resolve().then(() => {
+    formState.password = "";
+  });
+
+  const storage = new MemoryStorage();
+  const created = await createVaultEnvelope({ revision: 1 }, capturedPin);
+  commitVaultEnvelope(storage, created.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  await queueVaultSave(Promise.resolve(), {
+    storage,
+    vault: { revision: 2 },
+    key: created.key,
+    envelope: created.envelope,
+  });
+
+  const unlocked = await unlockStoredVault(storage, "246810");
+  assert.equal(unlocked.vault.revision, 2);
+  assert.equal(formState.password, "");
 });
 
 test("existing normalized vaults retry trimmed and Thai-digit PIN forms", async () => {
@@ -189,4 +214,26 @@ test("reset archives both encrypted snapshots and restores them without decrypti
   restoreVaultArchive(storage, archive);
   const unlocked = await unlockStoredVault(storage, password);
   assert.equal(unlocked.vault.items[0].name, "Preserved");
+});
+
+test("a second reset preserves the older browser archive while returning a new download", async () => {
+  const storage = new MemoryStorage();
+  const older = await createVaultEnvelope({ items: [{ name: "Older important vault" }] }, "older-pin");
+  commitVaultEnvelope(storage, older.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  const olderArchive = archiveAndResetStoredVault(storage);
+
+  const newer = await createVaultEnvelope({ items: [] }, "newer-pin");
+  commitVaultEnvelope(storage, newer.envelope, {
+    preserveCurrentAsBackup: false,
+  });
+  const newerDownload = archiveAndResetStoredVault(storage);
+
+  assert.deepEqual(readVaultArchive(storage), olderArchive);
+  assert.deepEqual(newerDownload.current, newer.envelope);
+
+  restoreVaultArchive(storage, readVaultArchive(storage));
+  const unlocked = await unlockStoredVault(storage, "older-pin");
+  assert.equal(unlocked.vault.items[0].name, "Older important vault");
 });

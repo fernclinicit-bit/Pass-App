@@ -17,6 +17,7 @@ import {
   isVaultArchive,
   isVaultEnvelope,
   queueVaultSave,
+  readVaultArchive,
   readVaultEnvelope,
   restoreVaultArchive,
   unlockStoredVault,
@@ -350,6 +351,7 @@ function setLockScreenMode() {
   document.body.classList.remove("vault-open");
   $("#unlockForm").elements.password.type = "password";
   $("#toggleUnlockPassword").textContent = "ดูรหัส";
+  $("#restoreArchivedFromLock").hidden = !readVaultArchive(localStorage);
   setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
 }
 
@@ -966,13 +968,17 @@ $("#setupForm").addEventListener("input", (event) => {
 $("#setupForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const enteredSecret = form.elements.password.value;
+  const confirmedSecret = form.elements.confirmPassword.value;
   if (
-    normalizeVaultSecret(form.elements.password.value)
-    !== normalizeVaultSecret(form.elements.confirmPassword.value)
+    normalizeVaultSecret(enteredSecret)
+    !== normalizeVaultSecret(confirmedSecret)
   ) return toast("รหัสไม่ตรงกัน", "กรุณายืนยันรหัสผ่านหรือ PIN อีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
   const button = form.querySelector("button[type=submit]");
+  const secretInputs = [...form.querySelectorAll('input[type="password"]')];
+  secretInputs.forEach((input) => { input.disabled = true; });
   button.disabled = true;
   button.textContent = "กำลังตรวจสอบแท็บ…";
   try {
@@ -981,10 +987,10 @@ $("#setupForm").addEventListener("submit", async (event) => {
       return;
     }
     button.textContent = "กำลังตรวจ PIN กับ Server…";
-    await authenticateServerPin(form.elements.password.value);
+    await authenticateServerPin(enteredSecret);
     button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
     vault = createEmptyVault();
-    const result = await createVaultEnvelope(vault, form.elements.password.value);
+    const result = await createVaultEnvelope(vault, enteredSecret);
     vaultKey = result.key;
     commitVaultEnvelope(localStorage, result.envelope, {
       preserveCurrentAsBackup: false,
@@ -1001,6 +1007,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
     toast("สร้าง Vault ไม่สำเร็จ", error.message);
   } finally {
     lockInProgress = false;
+    secretInputs.forEach((input) => { input.disabled = false; });
     button.disabled = false;
     button.innerHTML = 'สร้าง Vault ที่เข้ารหัส <span>→</span>';
   }
@@ -1011,8 +1018,10 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   if (lockInProgress) return;
   lockInProgress = true;
   const button = event.currentTarget.querySelector('button[type="submit"]');
-  const enteredSecret = event.currentTarget.elements.password.value;
+  const secretInput = event.currentTarget.elements.password;
+  const enteredSecret = secretInput.value;
   let serverPinVerified = false;
+  secretInput.disabled = true;
   button.disabled = true;
   button.textContent = "กำลังตรวจสอบแท็บ…";
   $("#unlockError").hidden = true;
@@ -1061,6 +1070,7 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     $("#unlockError").hidden = false;
   } finally {
     lockInProgress = false;
+    secretInput.disabled = false;
     button.disabled = false;
     button.innerHTML = 'เข้าสู่ระบบ <span>→</span>';
   }
@@ -1274,24 +1284,29 @@ $("#groupForm").addEventListener("submit", async (event) => {
 $("#changeMasterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  const currentSecret = form.elements.currentPassword.value;
+  const newSecret = form.elements.newPassword.value;
+  const confirmedSecret = form.elements.confirmPassword.value;
   if (
-    normalizeVaultSecret(form.elements.newPassword.value)
-    !== normalizeVaultSecret(form.elements.confirmPassword.value)
+    normalizeVaultSecret(newSecret)
+    !== normalizeVaultSecret(confirmedSecret)
   ) return toast("รหัสใหม่ไม่ตรงกัน", "กรุณายืนยันอีกครั้ง");
   if (lockInProgress) return;
   lockInProgress = true;
   let currentPinVerified = false;
   const button = form.querySelector("button");
+  const secretInputs = [...form.querySelectorAll('input[type="password"]')];
+  secretInputs.forEach((input) => { input.disabled = true; });
   button.disabled = true;
   button.textContent = "กำลังเข้ารหัสใหม่…";
   try {
-    await unlockStoredVault(localStorage, form.elements.currentPassword.value);
+    await unlockStoredVault(localStorage, currentSecret);
     currentPinVerified = true;
     button.textContent = "กำลังตรวจ PIN ใหม่กับ Server…";
-    await authenticateServerPin(form.elements.newPassword.value);
+    await authenticateServerPin(newSecret);
     await persistVault();
     addActivity("เปลี่ยนรหัสผ่าน", "Vault ถูกเข้ารหัสใหม่ด้วยกุญแจชุดใหม่");
-    const result = await createVaultEnvelope(vault, form.elements.newPassword.value);
+    const result = await createVaultEnvelope(vault, newSecret);
     vaultKey = result.key;
     commitVaultEnvelope(localStorage, result.envelope, {
       preserveCurrentAsBackup: false,
@@ -1307,6 +1322,7 @@ $("#changeMasterForm").addEventListener("submit", async (event) => {
     );
   } finally {
     lockInProgress = false;
+    secretInputs.forEach((input) => { input.disabled = false; });
     button.disabled = false;
     button.textContent = "บันทึกรหัสใหม่";
   }
@@ -1633,6 +1649,13 @@ $("#exportVaultBtn").addEventListener("click", async () => {
 });
 $("#importBackupBtn").addEventListener("click", () => $("#backupFileInput").click());
 $("#restoreFromLock").addEventListener("click", () => $("#backupFileInput").click());
+$("#restoreArchivedFromLock").addEventListener("click", () => {
+  const archive = readVaultArchive(localStorage);
+  if (!archive) return toast("ไม่พบ Vault เดิม", "เลือกกู้คืนจากไฟล์ Backup แทน");
+  if (!confirm("กู้คืน Vault เดิมที่เก็บไว้ในเบราว์เซอร์และแทนที่ Vault ปัจจุบันใช่หรือไม่?")) return;
+  restoreVaultArchive(localStorage, archive);
+  location.reload();
+});
 $("#backupFileInput").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   event.target.value = "";
