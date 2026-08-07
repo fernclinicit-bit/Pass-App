@@ -30,6 +30,8 @@ import { readCredentialFile } from "./xlsx-reader.js";
 
 const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
 const THEME_KEY = "passly-theme";
+const VAULT_SYNC_REVISION_KEY = "passly-vault-sync-revision-v1";
+const VAULT_SYNC_CONFLICT_KEY = "passly-vault-sync-conflict-v1";
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const nowIso = () => new Date().toISOString();
@@ -75,6 +77,11 @@ let lockInProgress = false;
 let releaseVaultTabLock = null;
 let vaultTabLockTask = null;
 let requests = loadRequests();
+let remoteVaultRevision = null;
+let remoteSyncAvailable = false;
+let remoteSyncConflict = false;
+let pendingRemoteUpload = false;
+let remoteSyncQueue = Promise.resolve();
 
 function escapeHtml(value = "") {
   const element = document.createElement("div");
@@ -190,6 +197,114 @@ async function logoutServerSession() {
   }
 }
 
+function setSyncStatus(state, message) {
+  const container = $("#syncState");
+  if (!container) return;
+  container.dataset.state = state;
+  $("#syncStatus").textContent = message;
+}
+
+async function fetchRemoteVault() {
+  const response = await fetch("/api/vault", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (response.status === 404) return null;
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "โหลด Encrypted Vault จาก Server ไม่สำเร็จ");
+    error.code = result.code || response.status;
+    throw error;
+  }
+  return result;
+}
+
+async function prepareRemoteVaultForUnlock() {
+  const localEnvelope = getStoredEnvelope();
+  const knownRevisionRaw = localStorage.getItem(VAULT_SYNC_REVISION_KEY);
+  const knownRevision = Number(knownRevisionRaw);
+  const hasKnownRevision = knownRevisionRaw !== null
+    && Number.isSafeInteger(knownRevision)
+    && knownRevision >= 0;
+  const hadConflict = localStorage.getItem(VAULT_SYNC_CONFLICT_KEY) === "1";
+  try {
+    const remote = await fetchRemoteVault();
+    remoteSyncAvailable = true;
+    remoteSyncConflict = false;
+    remoteVaultRevision = remote?.revision ?? 0;
+    if (!remote) {
+      pendingRemoteUpload = Boolean(localEnvelope);
+      setSyncStatus("syncing", localEnvelope ? "รออัปโหลด Vault เครื่องนี้" : "พร้อมสร้าง Vault กลาง");
+      return { source: localEnvelope ? "local" : "empty" };
+    }
+
+    const localTime = Date.parse(localEnvelope?.updatedAt || "") || 0;
+    const remoteTime = Date.parse(remote.envelope?.updatedAt || remote.updatedAt || "") || 0;
+    const remoteChangedSinceThisDevice = hasKnownRevision && remoteVaultRevision > knownRevision;
+    if (!localEnvelope || hadConflict || remoteChangedSinceThisDevice || remoteTime > localTime) {
+      commitVaultEnvelope(localStorage, remote.envelope, {
+        preserveCurrentAsBackup: Boolean(localEnvelope),
+      });
+      localStorage.setItem(VAULT_SYNC_REVISION_KEY, String(remoteVaultRevision));
+      localStorage.removeItem(VAULT_SYNC_CONFLICT_KEY);
+      pendingRemoteUpload = false;
+      setSyncStatus("synced", `ซิงก์แล้ว · รุ่น ${remoteVaultRevision}`);
+      return { source: "remote" };
+    }
+
+    pendingRemoteUpload = localTime > remoteTime;
+    setSyncStatus(
+      pendingRemoteUpload ? "syncing" : "synced",
+      pendingRemoteUpload ? "มีข้อมูลเครื่องนี้รออัปโหลด" : `ซิงก์แล้ว · รุ่น ${remoteVaultRevision}`,
+    );
+    return { source: "local" };
+  } catch (error) {
+    remoteSyncAvailable = false;
+    remoteVaultRevision = null;
+    setSyncStatus("offline", "ซิงก์ไม่ได้ · ใช้ข้อมูลในเครื่อง");
+    if (!localEnvelope) throw error;
+    return { source: "local-offline", error };
+  }
+}
+
+async function uploadRemoteEnvelope(envelope) {
+  if (!remoteSyncAvailable || remoteSyncConflict || !envelope) return;
+  setSyncStatus("syncing", "กำลังซิงก์ข้อมูลเข้ารหัส…");
+  const response = await fetch("/api/vault", {
+    method: "PUT",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ envelope, baseRevision: remoteVaultRevision ?? 0 }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (response.status === 409) {
+    remoteSyncConflict = true;
+    localStorage.setItem(VAULT_SYNC_CONFLICT_KEY, "1");
+    setSyncStatus("conflict", "พบข้อมูลใหม่จากอีกเครื่อง · ออกจากระบบแล้วเข้าใหม่");
+    toast("หยุดการซิงก์เพื่อป้องกันข้อมูลทับกัน", "กรุณาออกจากระบบและเข้าใหม่เพื่อรับ Vault รุ่นล่าสุด");
+    return;
+  }
+  if (!response.ok) throw new Error(result.error || "อัปโหลด Encrypted Vault ไม่สำเร็จ");
+  remoteVaultRevision = result.revision;
+  localStorage.setItem(VAULT_SYNC_REVISION_KEY, String(remoteVaultRevision));
+  localStorage.removeItem(VAULT_SYNC_CONFLICT_KEY);
+  pendingRemoteUpload = false;
+  setSyncStatus("synced", `ซิงก์แล้ว · รุ่น ${remoteVaultRevision}`);
+}
+
+function queueRemoteEnvelopeSync(envelope) {
+  const snapshot = structuredClone(envelope);
+  remoteSyncQueue = remoteSyncQueue
+    .catch(() => {})
+    .then(() => uploadRemoteEnvelope(snapshot))
+    .catch((error) => {
+      console.error("Encrypted Vault sync failed.", error);
+      setSyncStatus("offline", "ซิงก์ไม่สำเร็จ · ข้อมูลยังอยู่ในเครื่อง");
+    });
+  return remoteSyncQueue;
+}
+
 async function copyText(value, title = "คัดลอกแล้ว") {
   if (!navigator.clipboard?.writeText) throw new Error("เบราว์เซอร์ไม่อนุญาตให้คัดลอก");
   await navigator.clipboard.writeText(value);
@@ -296,7 +411,9 @@ async function persistVault() {
       }
     },
   });
-  return saveQueue;
+  const savedEnvelope = await saveQueue;
+  await queueRemoteEnvelopeSync(savedEnvelope);
+  return savedEnvelope;
 }
 
 function addActivity(action, detail, itemId = null) {
@@ -374,10 +491,11 @@ function getSecurityReport() {
   return { counts, findings, score: Math.max(0, 100 - Math.min(100, penalty)) };
 }
 
-function setLockScreenMode() {
+function setLockScreenMode(remoteExists = false) {
   const exists = Boolean(
     getStoredEnvelope()
-    || readVaultEnvelope(localStorage, VAULT_BACKUP_STORAGE_KEY),
+    || readVaultEnvelope(localStorage, VAULT_BACKUP_STORAGE_KEY)
+    || remoteExists
   );
   $("#setupPanel").hidden = exists;
   $("#unlockPanel").hidden = !exists;
@@ -389,6 +507,18 @@ function setLockScreenMode() {
   $("#toggleUnlockPassword").textContent = "ดูรหัส";
   $("#restoreArchivedFromLock").hidden = !readVaultArchive(localStorage);
   setTimeout(() => $(`#${exists ? "unlockForm" : "setupForm"} [name=password]`)?.focus(), 80);
+}
+
+async function refreshLockScreenMode() {
+  let remoteExists = false;
+  try {
+    const response = await fetch("/api/vault/status", { cache: "no-store" });
+    const status = await response.json();
+    remoteExists = Boolean(response.ok && status.available && status.exists);
+  } catch {
+    // Offline startup still supports the encrypted local copy.
+  }
+  setLockScreenMode(remoteExists);
 }
 
 async function lockVault(reason = "ออกจากระบบแล้ว", { save = true } = {}) {
@@ -430,6 +560,7 @@ function afterUnlock() {
   clearInterval(lineInterval);
   lineInterval = setInterval(pullLineRequests, 5000);
   checkServerConfiguration();
+  if (pendingRemoteUpload) queueRemoteEnvelopeSync(vaultEnvelope);
 }
 
 function showView(view) {
@@ -1045,6 +1176,19 @@ $("#setupForm").addEventListener("submit", async (event) => {
     }
     button.textContent = "กำลังตรวจ PIN กับ Server…";
     await authenticateServerPin(enteredSecret);
+    button.textContent = "กำลังตรวจสอบ Vault กลาง…";
+    await prepareRemoteVaultForUnlock();
+    if (getStoredEnvelope()) {
+      button.textContent = "กำลังถอดรหัส…";
+      const stored = await unlockStoredVault(localStorage, enteredSecret);
+      vault = migrateVaultData(stored.vault);
+      vaultKey = stored.key;
+      vaultEnvelope = stored.envelope;
+      form.reset();
+      afterUnlock();
+      toast("โหลด Vault จาก Server แล้ว", "ข้อมูล Password พร้อมใช้งานบนอุปกรณ์นี้");
+      return;
+    }
     button.textContent = "กำลังสร้างกุญแจเข้ารหัส…";
     vault = createEmptyVault();
     const result = await createVaultEnvelope(vault, enteredSecret);
@@ -1054,6 +1198,7 @@ $("#setupForm").addEventListener("submit", async (event) => {
       preserveCurrentAsBackup: false,
       clearBackup: true,
     });
+    pendingRemoteUpload = true;
     localStorage.removeItem("passly-lark");
     form.reset();
     afterUnlock();
@@ -1094,6 +1239,8 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     button.textContent = "กำลังตรวจ PIN กับ Server…";
     await authenticateServerPin(enteredSecret);
     serverPinVerified = true;
+    button.textContent = "กำลังโหลด Vault กลาง…";
+    await prepareRemoteVaultForUnlock();
     button.textContent = "กำลังถอดรหัส…";
     const result = await unlockStoredVault(
       localStorage,
@@ -1874,4 +2021,4 @@ if (localStorage.getItem(THEME_KEY) === "dark") document.body.classList.add("dar
 const initialHash = location.hash.slice(1);
 if (pageTitles[initialHash]) activeView = initialHash;
 updateGenerator();
-setLockScreenMode();
+refreshLockScreenMode();

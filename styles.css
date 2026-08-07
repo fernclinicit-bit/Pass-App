@@ -88,6 +88,12 @@ input:focus, textarea:focus, select:focus { border-color: #9bae59; box-shadow: 0
 .vault-state { margin-bottom: 10px; padding: 12px; border: 1px solid #334138; border-radius: 9px; background: #202b24; }
 .vault-state div { font-size: 10px; }
 .vault-state small { display: block; margin: 5px 0 0 14px; color: #859188; font-size: 9px; }
+.sync-state { display: flex; align-items: center; gap: 7px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #334138; color: #aab5ac; }
+.sync-state span { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #9aa49d; }
+.sync-state strong { font-size: 9px; font-weight: 600; }
+.sync-state[data-state="syncing"] span { background: #d59a33; animation: pulse 1s infinite; }
+.sync-state[data-state="synced"] span { background: #79a832; }
+.sync-state[data-state="offline"] span, .sync-state[data-state="conflict"] span { background: #d35d5d; }
 .lock-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid #3d4a41; border-radius: 8px; background: transparent; color: #dce3dd; font-size: 11px; cursor: pointer; }
 .user-card { display: flex; align-items: center; gap: 9px; margin-top: 15px; padding: 14px 4px 0; border-top: 1px solid #303c34; }
 .user-card strong, .user-card small { display: block; }
