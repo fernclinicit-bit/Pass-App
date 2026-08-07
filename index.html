@@ -75,7 +75,11 @@
         <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> ตั้งค่า</button>
       </nav>
       <div class="sidebar-bottom">
-        <div class="vault-state"><div><span class="pulse-dot"></span><strong>เข้าสู่ระบบอยู่</strong></div><small>ไม่ล็อกอัตโนมัติ</small></div>
+        <div class="vault-state">
+          <div><span class="pulse-dot"></span><strong>เข้าสู่ระบบอยู่</strong></div>
+          <small>ไม่ล็อกอัตโนมัติ</small>
+          <div class="sync-state" id="syncState" data-state="checking"><span></span><strong id="syncStatus">กำลังตรวจสอบการซิงก์…</strong></div>
+        </div>
         <button class="lock-btn" id="lockVaultBtn" type="button"><span>⌁</span> ออกจากระบบ</button>
         <div class="user-card"><span class="avatar">FN</span><span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span></div>
       </div>

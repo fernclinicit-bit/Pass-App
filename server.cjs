@@ -8,6 +8,11 @@ const {
   verifyPinHash,
   verifySessionToken,
 } = require('./pin-auth.cjs');
+const {
+  MAX_ENVELOPE_BYTES,
+  VaultConflictError,
+  createVaultStore,
+} = require('./vault-sync-store.cjs');
 
 const root = __dirname;
 const port = process.env.PORT || 3030;
@@ -20,6 +25,7 @@ const authWindowMs = 15 * 60 * 1000;
 const authAttemptLimit = 5;
 const maxShareExpiryMs = 30 * 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
+const vaultStore = createVaultStore();
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -191,6 +197,58 @@ function handleAdminLogout(req, res) {
     'application/json; charset=utf-8',
     { 'Set-Cookie': sessionCookie(req, '', 0) },
   );
+}
+
+async function handleVaultStatus(res) {
+  if (!vaultStore) {
+    return send(res, 200, JSON.stringify({ ok: true, available: false, exists: false }));
+  }
+  const current = await vaultStore.get();
+  return send(res, 200, JSON.stringify({
+    ok: true,
+    available: true,
+    exists: Boolean(current),
+  }));
+}
+
+async function handleVaultRead(res) {
+  if (!vaultStore) {
+    return send(res, 503, JSON.stringify({
+      ok: false,
+      code: 'sync_unavailable',
+      error: 'ยังไม่ได้เชื่อมฐานข้อมูลถาวรสำหรับซิงก์ Vault',
+    }));
+  }
+  const current = await vaultStore.get();
+  if (!current) {
+    return send(res, 404, JSON.stringify({ ok: false, code: 'vault_not_found' }));
+  }
+  return send(res, 200, JSON.stringify({ ok: true, ...current }));
+}
+
+async function handleVaultWrite(req, res) {
+  if (!vaultStore) {
+    return send(res, 503, JSON.stringify({
+      ok: false,
+      code: 'sync_unavailable',
+      error: 'ยังไม่ได้เชื่อมฐานข้อมูลถาวรสำหรับซิงก์ Vault',
+    }));
+  }
+  const data = JSON.parse(await readBody(req, MAX_ENVELOPE_BYTES + 20_000) || '{}');
+  try {
+    const saved = await vaultStore.put(data.envelope, Number(data.baseRevision));
+    return send(res, 200, JSON.stringify({ ok: true, ...saved }));
+  } catch (error) {
+    if (error instanceof VaultConflictError) {
+      return send(res, 409, JSON.stringify({
+        ok: false,
+        code: error.code,
+        error: error.message,
+        currentRevision: error.currentRevision,
+      }));
+    }
+    throw error;
+  }
 }
 
 function readRequests() {
@@ -477,6 +535,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/api/auth/logout') {
       return handleAdminLogout(req, res);
     }
+    if (req.method === 'GET' && req.url === '/api/vault/status') {
+      return await handleVaultStatus(res);
+    }
+    if (req.method === 'GET' && req.url === '/api/vault') {
+      if (!requireAdminSession(req, res)) return;
+      return await handleVaultRead(res);
+    }
+    if (req.method === 'PUT' && req.url === '/api/vault') {
+      if (!requireAdminSession(req, res)) return;
+      return await handleVaultWrite(req, res);
+    }
     if (req.method === 'POST' && req.url === '/api/line/webhook') {
       return await handleLineWebhook(req, res);
     }
@@ -495,6 +564,7 @@ const server = http.createServer(async (req, res) => {
         lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET),
         lineReplyConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
         lineGroupRestricted: Boolean(process.env.LINE_ALLOWED_GROUP_ID),
+        vaultSyncConfigured: Boolean(vaultStore),
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',
         larkInboundEnabled: false,

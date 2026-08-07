@@ -6,11 +6,13 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: 22
       - key: NODE_ENV
         value: production
       - key: PASSLY_ADMIN_PIN_HASH
+        sync: false
+      - key: DATABASE_URL
         sync: false
