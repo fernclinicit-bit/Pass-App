@@ -58,7 +58,7 @@ test("delivery menu offers LINE by default without Lark", async () => {
   assert.match(app, /resolveShareExpiry/);
 });
 
-test("password requests are accepted from LINE only", async (context) => {
+test("LINE password requests and secure delivery work end to end", async (context) => {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "passly-line-test-"));
@@ -104,7 +104,7 @@ test("password requests are accepted from LINE only", async (context) => {
   const health = await healthResponse.json();
   assert.equal(health.requestChannel, "LINE");
   assert.equal(health.deliveryChannel, "LINE");
-  assert.equal(health.larkInboundEnabled, false);
+  assert.equal(health.larkInboundEnabled, true);
   assert.equal(health.adminPinConfigured, true);
 
   const authResponse = await fetch(`${baseUrl}/api/auth/pin`, {
@@ -120,7 +120,8 @@ test("password requests are accepted from LINE only", async (context) => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ type: "url_verification", challenge: "test" }),
   });
-  assert.equal(larkInbound.status, 404);
+  assert.equal(larkInbound.status, 200);
+  assert.deepEqual(await larkInbound.json(), { challenge: "test" });
 
   const unsignedLine = await fetch(`${baseUrl}/api/line/webhook`, {
     method: "POST",
@@ -134,7 +135,7 @@ test("password requests are accepted from LINE only", async (context) => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ text: "delivery test" }),
   });
-  assert.equal(larkOutbound.status, 404);
+  assert.equal(larkOutbound.status, 400);
 
   const webhookPayload = JSON.stringify({
     events: [{
@@ -171,7 +172,7 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.equal(lineRequest.lineGroupId, "C-test-group");
   assert.equal(lineRequest.name, "LINE Test User");
 
-  const shareUrl = `${baseUrl}/share.html#encrypted-payload`;
+  const shareUrl = `${baseUrl}/share.html?p=encrypted-payload`;
   const tooLongDelivery = await fetch(`${baseUrl}/api/line/deliver`, {
     method: "POST",
     headers: {
@@ -210,7 +211,7 @@ test("password requests are accepted from LINE only", async (context) => {
   assert.ok(pushCall, "LINE Push API should be called");
   assert.equal(pushCall.body.to, "C-test-group");
   assert.equal(pushCall.body.messages.length, 2);
-  assert.match(pushCall.body.messages[0].text, /share\.html#encrypted-payload/);
+  assert.match(pushCall.body.messages[0].text, /share\.html\?p=encrypted-payload/);
   assert.match(pushCall.body.messages[1].text, /Abc12345/);
 
   const deliveredList = await fetch(`${baseUrl}/api/requests`, {

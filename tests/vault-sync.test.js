@@ -28,8 +28,8 @@ test("vault sync accepts only an encrypted envelope", () => {
   assert.equal(isEncryptedVaultEnvelope({ ...validEnvelope, data: "short" }), false);
 });
 
-test("vault sync is disabled safely when DATABASE_URL is absent", () => {
-  assert.equal(createVaultStore(""), null);
+test("vault sync falls back to local encrypted storage when DATABASE_URL is absent", () => {
+  assert.equal(createVaultStore("").constructor.name, "LocalVaultStore");
 });
 
 test("vault conflicts expose only the current revision", () => {

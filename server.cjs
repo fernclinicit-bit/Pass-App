@@ -7,7 +7,7 @@ try {
   const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
   for (const line of envFile.split('\n')) {
     const match = line.match(/^\s*([^#]\w+)\s*=\s*(.*)$/);
-    if (match) process.env[match[1]] = match[2].trim();
+    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2].trim();
   }
 } catch (e) { /* ignore */ }
 
@@ -585,8 +585,12 @@ async function handleLineWebhook(req, res) {
 function validatedShareUrl(req, value) {
   const shareUrl = new URL(String(value || ''));
   const expectedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
-  if (shareUrl.host !== expectedHost || shareUrl.pathname !== '/share.html' || !shareUrl.hash) {
+  const encryptedPayload = shareUrl.searchParams.get('p') || shareUrl.hash.slice(1);
+  if (shareUrl.host !== expectedHost || shareUrl.pathname !== '/share.html' || !encryptedPayload) {
     throw new Error('ลิงก์ Passly Share ไม่ถูกต้อง');
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(encryptedPayload)) {
+    throw new Error('ข้อมูลเข้ารหัสในลิงก์ Passly Share ไม่ถูกต้อง');
   }
   const isLoopback = shareUrl.hostname === '127.0.0.1' || shareUrl.hostname === 'localhost' || shareUrl.hostname === '::1';
   if (process.env.NODE_ENV === 'production' && !isLoopback && shareUrl.protocol !== 'https:') {
