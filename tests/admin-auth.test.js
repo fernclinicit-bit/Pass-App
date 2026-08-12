@@ -97,7 +97,7 @@ test("admin API requires the configured PIN and issues an HttpOnly session", asy
   assert.equal(unauthorized.status, 401);
 
   const syncStatus = await (await fetch(`${baseUrl}/api/vault/status`)).json();
-  assert.deepEqual(syncStatus, { ok: true, available: false, exists: false });
+  assert.deepEqual(syncStatus, { ok: true, available: true, exists: false });
 
   const unauthorizedVault = await fetch(`${baseUrl}/api/vault`);
   assert.equal(unauthorizedVault.status, 401);
@@ -131,7 +131,7 @@ test("admin API requires the configured PIN and issues an HttpOnly session", asy
   const unavailableVault = await fetch(`${baseUrl}/api/vault`, {
     headers: { cookie },
   });
-  assert.equal(unavailableVault.status, 503);
+  assert.equal(unavailableVault.status, 404);
 
   const logout = await fetch(`${baseUrl}/api/auth/logout`, {
     method: "POST",

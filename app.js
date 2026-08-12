@@ -27,6 +27,7 @@ import {
   vaultEnvelopeIdentity,
 } from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
+import { createPortableShareUrl } from "./share-link.js";
 
 const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
 const THEME_KEY = "passly-theme";
@@ -1402,8 +1403,7 @@ $("#deliverForm").addEventListener("submit", async (event) => {
       recipient: request.name,
       expiresAt,
     }, pin);
-    const shareUrl = new URL("share.html", location.href);
-    shareUrl.hash = encryptedFragment;
+    const shareUrl = createPortableShareUrl(location.href, encryptedFragment);
     const prefix = vault.settings.sharePrefix || "[Passly] ข้อมูลเข้าใช้งาน";
     const message = `${prefix}\nผู้รับ: ${request.name}\nระบบ: ${item.name}\nหมดอายุ: ${formatDateTime(expiresAt)}\nลิงก์: ${shareUrl.href}`;
 
