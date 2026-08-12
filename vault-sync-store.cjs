@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const MAX_ENVELOPE_BYTES = 5_000_000;
 
 function isEncryptedVaultEnvelope(value) {
@@ -114,8 +116,43 @@ class PostgresVaultStore {
   }
 }
 
+class LocalVaultStore {
+  constructor(filePath) {
+    this.filePath = filePath;
+  }
+  async get() {
+    try {
+      return JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+    } catch (e) {
+      return null;
+    }
+  }
+  async put(envelope, baseRevision) {
+    if (!isEncryptedVaultEnvelope(envelope)) throw new Error('รูปแบบ Encrypted Vault ไม่ถูกต้อง');
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+      throw new Error('baseRevision ไม่ถูกต้อง');
+    }
+    const current = await this.get();
+    const currentRevision = current ? current.revision : 0;
+    if (currentRevision !== baseRevision) throw new VaultConflictError(currentRevision);
+    const nextRevision = currentRevision + 1;
+    const nextState = {
+      envelope,
+      revision: nextRevision,
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(this.filePath, JSON.stringify(nextState));
+    return { revision: nextRevision, updatedAt: nextState.updatedAt };
+  }
+  async close() {}
+}
+
 function createVaultStore(databaseUrl = process.env.DATABASE_URL) {
-  if (!databaseUrl) return null;
+  if (!databaseUrl) {
+    const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    return new LocalVaultStore(path.join(dataDir, 'vault.json'));
+  }
   const { Pool } = require('pg');
   return new PostgresVaultStore(new Pool({
     connectionString: databaseUrl,
