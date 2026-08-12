@@ -1,3 +1,3 @@
 @echo off
-node server.cjs
+node --env-file=.env server.cjs
 pause

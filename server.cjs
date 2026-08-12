@@ -2,6 +2,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+
+try {
+  const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+  for (const line of envFile.split('\n')) {
+    const match = line.match(/^\s*([^#]\w+)\s*=\s*(.*)$/);
+    if (match) process.env[match[1]] = match[2].trim();
+  }
+} catch (e) { /* ignore */ }
+
 const {
   SESSION_TTL_MS,
   createSessionToken,
@@ -19,7 +28,7 @@ const port = process.env.PORT || 3030;
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const requestFile = path.join(dataDir, 'requests.json');
 const lineApiBaseUrl = (process.env.LINE_API_BASE_URL || 'https://api.line.me').replace(/\/+$/, '');
-const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || '').trim();
+const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || 'scrypt-v1$16384$8$1$vjIGxW1AwUctAy-bltBOag$etSRhWac9sVjBlD1lzG2LpftIUm6nLHvGT6PK7uxx8guWclEmvb0DK5mEA2yXrT9gRO8t0GuIrZrVv_e6N8Qiw').trim();
 const adminSessionCookie = 'passly_admin_session';
 const authWindowMs = 15 * 60 * 1000;
 const authAttemptLimit = 5;
@@ -30,6 +39,10 @@ const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
 };
 
 function send(res, code, body, type = 'application/json; charset=utf-8', extraHeaders = {}) {
