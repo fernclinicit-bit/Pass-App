@@ -1911,6 +1911,39 @@ $("#exportActivityBtn").addEventListener("click", () => {
 
 $("#changeMasterBtn").addEventListener("click", () => openModal("changeMasterModal"));
 
+$("#lineConfigForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const secret = $("#lineSecret").value.trim();
+  const token = $("#lineToken").value.trim();
+  const groupId = $("#lineGroupId").value.trim();
+  const btn = e.target.querySelector('button');
+  const originalText = btn.textContent;
+  btn.textContent = "กำลังบันทึก...";
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/config/line', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, token, groupId })
+    });
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || "เกิดข้อผิดพลาด");
+    
+    toast("บันทึกสำเร็จ", "ตั้งค่า LINE เรียบร้อยแล้ว");
+    $("#lineSecret").value = "";
+    $("#lineToken").value = "";
+    $("#lineGroupId").value = "";
+    await fetchServerHealth();
+  } catch (err) {
+    toast("ข้อผิดพลาด", err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+});
+
+
 async function resetVaultStorage() {
   if (vault && vaultKey) await persistVault();
   const archive = createVaultArchive(localStorage);

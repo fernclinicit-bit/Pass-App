@@ -27,6 +27,24 @@ const root = __dirname;
 const port = process.env.PORT || 3030;
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const requestFile = path.join(dataDir, 'requests.json');
+const configFile = path.join(dataDir, 'config.json');
+function getLineConfig() {
+  let localConfig = {};
+  try {
+    if (fs.existsSync(configFile)) {
+      localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Error reading config.json:', e);
+  }
+  return {
+    channelSecret: localConfig.LINE_CHANNEL_SECRET || process.env.LINE_CHANNEL_SECRET,
+    accessToken: localConfig.LINE_CHANNEL_ACCESS_TOKEN || process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    allowedGroupId: localConfig.LINE_ALLOWED_GROUP_ID || process.env.LINE_ALLOWED_GROUP_ID,
+    groupName: localConfig.LINE_GROUP_NAME || process.env.LINE_GROUP_NAME || 'บัญชี 1',
+  };
+}
+
 const lineApiBaseUrl = (process.env.LINE_API_BASE_URL || 'https://api.line.me').replace(/\/+$/, '');
 const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || 'scrypt-v1$16384$8$1$ThGLnqAg6XvTUU2ntycp_w$mWhPwfaQxnOyo3rQLMmKD0FrF5BW6xpfMmiFxNkkNpY71ZbK7754SXwoCSF6oOF3yrMYxCRO2L7-3HGzByyalA').trim();
 const adminSessionCookie = 'passly_admin_session';
@@ -278,7 +296,7 @@ function writeRequests(requests) {
 }
 
 function verifyLineSignature(raw, signature) {
-  const secret = process.env.LINE_CHANNEL_SECRET;
+  const secret = getLineConfig().channelSecret;
   if (!secret) return process.env.NODE_ENV !== 'production';
   const expected = crypto.createHmac('sha256', secret).update(raw).digest('base64');
   const actualBuffer = Buffer.from(signature || '');
@@ -304,7 +322,7 @@ const requestSystems = [
 
 function isAllowedLineGroup(event) {
   if (event.source?.type !== 'group') return false;
-  const allowedGroupId = process.env.LINE_ALLOWED_GROUP_ID;
+  const allowedGroupId = getLineConfig().allowedGroupId;
   return !allowedGroupId || event.source.groupId === allowedGroupId;
 }
 
@@ -327,7 +345,7 @@ function lineRequestMenu() {
 }
 
 async function replyLine(replyToken, messages) {
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const accessToken = getLineConfig().accessToken;
   if (!accessToken || !replyToken) return false;
   const response = await fetch(`${lineApiBaseUrl}/v2/bot/message/reply`, {
     method: 'POST',
@@ -345,7 +363,7 @@ async function replyLine(replyToken, messages) {
 }
 
 async function pushLine(to, messages) {
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const accessToken = getLineConfig().accessToken;
   if (!accessToken) throw new Error('ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN');
   const response = await fetch(`${lineApiBaseUrl}/v2/bot/message/push`, {
     method: 'POST',
@@ -363,7 +381,7 @@ async function pushLine(to, messages) {
 }
 
 async function getLineMemberName(event) {
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const accessToken = getLineConfig().accessToken;
   const groupId = event.source?.groupId;
   const userId = event.source?.userId;
   if (!accessToken || !groupId || !userId) return null;
@@ -420,7 +438,7 @@ function parseLineRequest(event) {
     source: 'LINE',
     lineUserId: event.source?.userId || null,
     lineGroupId: event.source?.groupId || null,
-    lineGroupName: process.env.LINE_GROUP_NAME || 'บัญชี 1',
+    lineGroupName: getLineConfig().groupName,
   };
 }
 
@@ -504,6 +522,28 @@ async function handleLark(req, res) {
   send(res, 200, JSON.stringify({ ok: true }));
 }
 
+
+async function handleLineConfigWrite(req, res) {
+  try {
+    const body = await parseBody(req);
+    const { secret, token, groupId } = body;
+    let localConfig = {};
+    if (fs.existsSync(configFile)) {
+      try {
+        localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      } catch (e) {}
+    }
+    localConfig.LINE_CHANNEL_SECRET = secret || '';
+    localConfig.LINE_CHANNEL_ACCESS_TOKEN = token || '';
+    localConfig.LINE_ALLOWED_GROUP_ID = groupId || '';
+    
+    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    send(res, 200, JSON.stringify({ ok: true }));
+  } catch (err) {
+    send(res, 400, JSON.stringify({ ok: false, error: err.message }));
+  }
+}
+
 async function handleLineWebhook(req, res) {
   const raw = await readBody(req);
   if (!verifyLineSignature(raw, req.headers['x-line-signature'])) {
@@ -565,7 +605,7 @@ async function handleLineDelivery(req, res) {
   }
 
   const groupId = String(request.lineGroupId || '');
-  const allowedGroupId = process.env.LINE_ALLOWED_GROUP_ID;
+  const allowedGroupId = getLineConfig().allowedGroupId;
   if (!groupId.startsWith('C') || (allowedGroupId && groupId !== allowedGroupId)) {
     return send(res, 403, JSON.stringify({ ok: false, error: 'กลุ่ม LINE ของคำขอนี้ไม่ได้รับอนุญาต' }));
   }
@@ -652,6 +692,11 @@ const server = http.createServer(async (req, res) => {
       if (!requireAdminSession(req, res)) return;
       return send(res, 200, JSON.stringify({ requests: readRequests() }));
     }
+    
+    if (req.method === 'POST' && req.url === '/api/config/line') {
+      if (!requireAdminSession(req, res)) return;
+      return await handleLineConfigWrite(req, res);
+    }
     if (req.method === 'POST' && req.url === '/api/line/deliver') {
       if (!requireAdminSession(req, res)) return;
       return await handleLineDelivery(req, res);
@@ -660,9 +705,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({
         ok: true,
         adminPinConfigured: Boolean(adminPinHash),
-        lineConfigured: Boolean(process.env.LINE_CHANNEL_SECRET),
-        lineReplyConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN),
-        lineGroupRestricted: Boolean(process.env.LINE_ALLOWED_GROUP_ID),
+        lineConfigured: Boolean(getLineConfig().channelSecret),
+        lineReplyConfigured: Boolean(getLineConfig().accessToken),
+        lineGroupRestricted: Boolean(getLineConfig().allowedGroupId),
         vaultSyncConfigured: Boolean(vaultStore),
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',

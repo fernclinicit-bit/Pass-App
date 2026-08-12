@@ -549,3 +549,7 @@ body.dark .architecture-note { background: #1d2936; }
   .line-alert { flex-wrap: wrap; }.line-alert button { width: 100%; }
   .toast { right: 12px; bottom: 12px; left: 12px; }
 }
+
+.line-config-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.config-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: inherit; }
+.config-input:focus { border-color: var(--accent-color); outline: none; }
