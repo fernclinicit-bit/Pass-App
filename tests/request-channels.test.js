@@ -156,6 +156,48 @@ test("LINE password requests and secure delivery work end to end", async (contex
   assert.equal(menuReply.body.messages[0].contents.body.contents.length, 6);
   assert.equal(menuReply.body.messages[0].quickReply, undefined);
 
+  const submenuPayload = JSON.stringify({
+    events: [{
+      type: "postback",
+      webhookEventId: "WEBHOOK-SUBMENU-1",
+      timestamp: Date.now(),
+      replyToken: "test-submenu-reply-token",
+      source: { type: "group", groupId: "C-test-group", userId: "U-test-user" },
+      postback: { data: new URLSearchParams({ action: "submenu", system: "Microsoft" }).toString() },
+    }],
+  });
+  const submenuSignature = crypto.createHmac("sha256", "test-line-secret").update(submenuPayload).digest("base64");
+  const submenuResponse = await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-line-signature": submenuSignature },
+    body: submenuPayload,
+  });
+  assert.equal(submenuResponse.status, 200);
+  assert.equal((await submenuResponse.json()).received, 0);
+  const submenuReply = lineCalls.find((call) => call.body?.replyToken === "test-submenu-reply-token");
+  assert.equal(submenuReply.body.messages[0].type, "flex");
+  assert.equal(submenuReply.body.messages[0].contents.body.contents.length, 2);
+  assert.match(submenuReply.body.messages[0].contents.body.contents[0].contents[0].action.data, /action=request/);
+
+  const accountPayload = JSON.stringify({
+    events: [{
+      type: "postback",
+      webhookEventId: "WEBHOOK-ACCOUNT-1",
+      timestamp: Date.now(),
+      replyToken: "test-account-reply-token",
+      source: { type: "group", groupId: "C-test-group", userId: "U-test-user" },
+      postback: { data: new URLSearchParams({ action: "request", system: "Microsoft", account: "ทีม Data 152603" }).toString() },
+    }],
+  });
+  const accountSignature = crypto.createHmac("sha256", "test-line-secret").update(accountPayload).digest("base64");
+  const accountResponse = await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-line-signature": accountSignature },
+    body: accountPayload,
+  });
+  assert.equal(accountResponse.status, 200);
+  assert.equal((await accountResponse.json()).received, 1);
+
   const larkOutbound = await fetch(`${baseUrl}/api/lark`, {
     method: "POST",
     headers: { "content-type": "application/json" },

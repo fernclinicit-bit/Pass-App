@@ -317,6 +317,28 @@ const requestSystems = [
   'Network',
 ];
 
+const requestAccountMenus = {
+  Microsoft: ['Microsoft Office', 'ทีม Data 152603', 'ทีม Manager 152603'],
+  Instagram: ['Marketing', 'Top Comment'],
+  Facebook: ['ทีมแพทย์', 'ทีม Marketing', 'หมอเฟิร์น', 'หมอปาล์ม'],
+  TikTok: [
+    'หมอเฟิร์น F1', 'ตัดปีก / เสริมจมูก', 'หมอเฟิร์น F2',
+    'คุณหมอฟาง', 'ทีมแพทย์ C1', 'หมอเฟิร์นลั้ลลา',
+    'น้องสาว Vaginal', 'TikTok Clinic', 'คุณหมอปาล์ม',
+  ],
+  'TikTok Ads': ['บัญชียิงแอด TikTok', 'TikTok Ads', 'TikTok Developers', 'TikTok Shop', 'ADS / Seller'],
+  Adobe: ['Adobe บัญชี 1', 'Adobe บัญชี 2', 'Adobe บัญชี 3'],
+  CapCut: ['CapCut VDO', 'CapCut Branding'],
+  'Apple ID': ['Apple ID Clinic', 'ทีม VDO', 'MacBook Air 032', 'MacBook Air 035'],
+  Gmail: ['Gmail IT 1', 'Gmail ส่วนกลาง', 'หมอปาล์ม', 'กราฟิก', 'Gmail IT 2'],
+  CCTV: ['DMSS', 'O-KAM Pro'],
+  Network: [
+    'TP-Link Deco', 'เครื่องพิมพ์ Fuji', 'HP Reception ข้าง',
+    'HP Reception หน้า', 'TP-Link Router', 'Switching TP-Link',
+    'NAS', 'Deco WiFi', 'HP Reception ช่างภาพ',
+  ],
+};
+
 function isAllowedLineGroup(event) {
   if (event.source?.type !== 'group') return false;
   const allowedGroupId = getLineConfig().allowedGroupId;
@@ -337,7 +359,10 @@ function lineRequestMenu() {
         action: {
           type: 'postback',
           label: system,
-          data: new URLSearchParams({ action: 'request', system }).toString(),
+          data: new URLSearchParams({
+            action: requestAccountMenus[system]?.length > 1 ? 'submenu' : 'request',
+            system,
+          }).toString(),
         },
       })),
     });
@@ -377,6 +402,70 @@ function lineRequestMenu() {
       styles: {
         footer: { separator: true, separatorColor: '#DDE5DF' },
       },
+    },
+  };
+}
+
+function lineAccountMenu(system) {
+  const accounts = requestAccountMenus[system] || [];
+  const rows = [];
+  for (let index = 0; index < accounts.length; index += 2) {
+    rows.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: accounts.slice(index, index + 2).map((account) => ({
+        type: 'button',
+        style: 'secondary',
+        height: 'sm',
+        action: {
+          type: 'postback',
+          label: account,
+          data: new URLSearchParams({ action: 'request', system, account }).toString(),
+        },
+      })),
+    });
+  }
+
+  return {
+    type: 'flex',
+    altText: `เลือกบัญชี ${system}`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#102118',
+        paddingAll: 'lg',
+        contents: [
+          { type: 'text', text: 'PASSLY', color: '#D6FF51', size: 'xs', weight: 'bold' },
+          { type: 'text', text: system, color: '#FFFFFF', size: 'xl', weight: 'bold', margin: 'sm' },
+          { type: 'text', text: 'เลือกบัญชีที่ต้องการขอ Password', color: '#B8C8BF', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: 'md',
+        contents: rows,
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: 'md',
+        contents: [{
+          type: 'button',
+          style: 'link',
+          height: 'sm',
+          action: {
+            type: 'postback',
+            label: '← กลับเมนูหลัก',
+            data: new URLSearchParams({ action: 'menu' }).toString(),
+          },
+        }],
+      },
+      styles: { footer: { separator: true, separatorColor: '#DDE5DF' } },
     },
   };
 }
@@ -443,7 +532,9 @@ function parseLineRequest(event) {
   if (event.type === 'postback') {
     const data = new URLSearchParams(event.postback?.data || '');
     if (data.get('action') !== 'request') return null;
-    systemPart = data.get('system') || 'ไม่ระบุระบบ';
+    const system = data.get('system') || 'ไม่ระบุระบบ';
+    const account = data.get('account') || '';
+    systemPart = account ? `${system} — ${account}` : system;
     reason = 'สมาชิกกดขอ Password จากเมนูในกลุ่ม LINE';
   } else if (event.type === 'message' && event.message?.type === 'text') {
     const text = event.message.text.trim();
@@ -476,6 +567,9 @@ function parseLineRequest(event) {
     lineUserId: event.source?.userId || null,
     lineGroupId: event.source?.groupId || null,
     lineGroupName: getLineConfig().groupName,
+    requestAccount: event.type === 'postback'
+      ? new URLSearchParams(event.postback?.data || '').get('account') || null
+      : null,
   };
 }
 
@@ -601,6 +695,21 @@ async function handleLineWebhook(req, res) {
     if (shouldShowMenu) {
       await replyLine(event.replyToken, [lineRequestMenu()]);
       continue;
+    }
+
+    if (event.type === 'postback') {
+      const data = new URLSearchParams(event.postback?.data || '');
+      if (data.get('action') === 'menu') {
+        await replyLine(event.replyToken, [lineRequestMenu()]);
+        continue;
+      }
+      if (data.get('action') === 'submenu') {
+        const system = data.get('system') || '';
+        if (requestAccountMenus[system]?.length > 1) {
+          await replyLine(event.replyToken, [lineAccountMenu(system)]);
+        }
+        continue;
+      }
     }
 
     const item = parseLineRequest(event);
@@ -753,6 +862,7 @@ const server = http.createServer(async (req, res) => {
         requestStorePersistent: Boolean(process.env.DATABASE_URL),
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',
+        lineNestedAccountMenus: true,
         larkInboundEnabled: true,
         larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
       }));
