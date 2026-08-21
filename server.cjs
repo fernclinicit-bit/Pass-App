@@ -862,6 +862,7 @@ const server = http.createServer(async (req, res) => {
         requestStorePersistent: Boolean(process.env.DATABASE_URL),
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',
+        lineNestedAccountMenus: true,
         larkInboundEnabled: true,
         larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
       }));
