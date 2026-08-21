@@ -52,6 +52,10 @@ test("delivery menu offers LINE by default without Lark", async () => {
   assert.doesNotMatch(html, /ส่งลิงก์เข้า Lark/);
   assert.match(app, /channel === "line"/);
   assert.match(app, /sendLineDelivery/);
+  assert.match(html, /id="lineReconnectBtn"/);
+  assert.match(app, /เซสชัน Server หมดอายุ · กดเชื่อมต่อใหม่/);
+  assert.match(app, /authenticateServerPin\(pin\)/);
+  assert.match(await fs.readFile(path.join(projectRoot, "server.cjs"), "utf8"), /type: 'flex'/);
   assert.match(html, /id="deliveryExpiry"/);
   assert.match(html, /option value="custom">กำหนดวันและเวลาเอง/);
   assert.match(html, /name="customExpiryAt"/);
@@ -129,6 +133,28 @@ test("LINE password requests and secure delivery work end to end", async (contex
     body: JSON.stringify({ events: [] }),
   });
   assert.equal(unsignedLine.status, 401);
+
+  const menuPayload = JSON.stringify({
+    events: [{
+      type: "message",
+      webhookEventId: "WEBHOOK-MENU-1",
+      timestamp: Date.now(),
+      replyToken: "test-menu-reply-token",
+      source: { type: "group", groupId: "C-test-group", userId: "U-test-user" },
+      message: { type: "text", id: "menu-message-1", text: "เมนู" },
+    }],
+  });
+  const menuSignature = crypto.createHmac("sha256", "test-line-secret").update(menuPayload).digest("base64");
+  const menuResponse = await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-line-signature": menuSignature },
+    body: menuPayload,
+  });
+  assert.equal(menuResponse.status, 200);
+  const menuReply = lineCalls.find((call) => call.body?.replyToken === "test-menu-reply-token");
+  assert.equal(menuReply.body.messages[0].type, "flex");
+  assert.equal(menuReply.body.messages[0].contents.body.contents.length, 6);
+  assert.equal(menuReply.body.messages[0].quickReply, undefined);
 
   const larkOutbound = await fetch(`${baseUrl}/api/lark`, {
     method: "POST",

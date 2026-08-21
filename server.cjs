@@ -327,19 +327,59 @@ function isAllowedLineGroup(event) {
 }
 
 function lineRequestMenu() {
-  return {
-    type: 'text',
-    text: 'เลือกบัญชีที่ต้องการขอ Password',
-    quickReply: {
-      items: requestSystems.map((system) => ({
-        type: 'action',
+  const rows = [];
+  for (let index = 0; index < requestSystems.length; index += 2) {
+    rows.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: requestSystems.slice(index, index + 2).map((system) => ({
+        type: 'button',
+        style: 'secondary',
+        height: 'sm',
         action: {
           type: 'postback',
-          label: system.slice(0, 20),
+          label: system,
           data: new URLSearchParams({ action: 'request', system }).toString(),
-          displayText: `ขอ Password: ${system}`,
         },
       })),
+    });
+  }
+
+  return {
+    type: 'flex',
+    altText: 'เมนูขอ Password — เลือกบัญชีที่ต้องการ',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#102118',
+        paddingAll: 'lg',
+        contents: [
+          { type: 'text', text: 'PASSLY', color: '#D6FF51', size: 'xs', weight: 'bold' },
+          { type: 'text', text: 'เมนูขอ Password', color: '#FFFFFF', size: 'xl', weight: 'bold', margin: 'sm' },
+          { type: 'text', text: 'เลือกบัญชีที่ต้องการใช้งาน', color: '#B8C8BF', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: 'md',
+        contents: rows,
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: 'md',
+        contents: [
+          { type: 'text', text: 'กดหนึ่งครั้งเพื่อส่งคำขอให้ผู้ดูแล', color: '#6F8076', size: 'xs', align: 'center' },
+        ],
+      },
+      styles: {
+        footer: { separator: true, separatorColor: '#DDE5DF' },
+      },
     },
   };
 }

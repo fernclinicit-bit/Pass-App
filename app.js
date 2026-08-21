@@ -74,6 +74,7 @@ let detailItemId = null;
 let shareResult = null;
 let lineInterval = null;
 let linePollReady = false;
+let lineReconnectBusy = false;
 let lockInProgress = false;
 let releaseVaultTabLock = null;
 let vaultTabLockTask = null;
@@ -1068,10 +1069,19 @@ async function checkServerConfiguration() {
 }
 
 async function pullLineRequests() {
-  if (!vault) return;
+  if (!vault) return false;
   try {
     const response = await fetch("/api/requests", { cache: "no-store" });
-    if (!response.ok) throw new Error("เชื่อมต่อ Server ไม่สำเร็จ");
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      const error = new Error(
+        response.status === 401
+          ? "เซสชัน Server หมดอายุ · กดเชื่อมต่อใหม่"
+          : result.error || "เชื่อมต่อ Server ไม่สำเร็จ",
+      );
+      error.code = response.status;
+      throw error;
+    }
     const payload = await response.json();
     const known = new Set(requests.map((request) => request.id));
     const incoming = (payload.requests || []).filter((request) => !known.has(request.id));
@@ -1089,9 +1099,35 @@ async function pullLineRequests() {
     linePollReady = true;
     $("#lineStatus").textContent = `เชื่อมต่อแล้ว · อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`;
     $("#lineAlert").classList.remove("offline");
+    $("#lineReconnectBtn").hidden = true;
+    return true;
   } catch (error) {
     $("#lineStatus").textContent = error.message;
     $("#lineAlert").classList.add("offline");
+    $("#lineReconnectBtn").hidden = error.code !== 401;
+    return false;
+  }
+}
+
+async function reconnectLineRequests() {
+  if (!vault || lineReconnectBusy) return;
+  const pin = prompt("กรอก PIN เพื่อเชื่อมต่อรายการคำขอ LINE อีกครั้ง");
+  if (pin === null) return;
+  const button = $("#lineReconnectBtn");
+  lineReconnectBusy = true;
+  button.disabled = true;
+  button.textContent = "กำลังเชื่อมต่อ…";
+  try {
+    await authenticateServerPin(pin);
+    linePollReady = false;
+    if (!await pullLineRequests()) throw new Error("โหลดรายการคำขอจาก Server ไม่สำเร็จ");
+    toast("เชื่อมต่อ LINE แล้ว", "โหลดรายการคำขอล่าสุดเรียบร้อย");
+  } catch (error) {
+    toast("เชื่อมต่อไม่สำเร็จ", error.message || "กรุณาตรวจสอบ PIN แล้วลองใหม่");
+  } finally {
+    lineReconnectBusy = false;
+    button.disabled = false;
+    button.textContent = "เชื่อมต่อใหม่";
   }
 }
 
@@ -2005,6 +2041,7 @@ $("#enableNotifications").addEventListener("click", async () => {
   const permission = await Notification.requestPermission();
   toast(permission === "granted" ? "เปิดแจ้งเตือนแล้ว" : "ยังไม่ได้รับอนุญาต", permission === "granted" ? "คำขอใหม่จะแจ้งบนหน้าจอ" : "เปิดได้ภายหลังจากการตั้งค่าเบราว์เซอร์");
 });
+$("#lineReconnectBtn").addEventListener("click", reconnectLineRequests);
 
 function persistBeforeSuspension() {
   if (!vault || !vaultKey || lockInProgress) return;
