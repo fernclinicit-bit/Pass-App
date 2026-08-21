@@ -22,6 +22,7 @@ const {
   VaultConflictError,
   createVaultStore,
 } = require('./vault-sync-store.cjs');
+const { createRequestStore } = require('./request-store.cjs');
 
 const root = __dirname;
 const port = process.env.PORT || 3030;
@@ -53,6 +54,7 @@ const authAttemptLimit = 5;
 const maxShareExpiryMs = 30 * 24 * 60 * 60 * 1000;
 const authAttempts = new Map();
 const vaultStore = createVaultStore();
+const requestStore = createRequestStore();
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -282,17 +284,12 @@ async function handleVaultWrite(req, res) {
   }
 }
 
-function readRequests() {
-  try {
-    return JSON.parse(fs.readFileSync(requestFile, 'utf8'));
-  } catch {
-    return [];
-  }
+async function readRequests() {
+  return requestStore.get();
 }
 
-function writeRequests(requests) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(requestFile, JSON.stringify(requests.slice(0, 500), null, 2));
+async function writeRequests(requests) {
+  return requestStore.put(requests);
 }
 
 function verifyLineSignature(raw, signature) {
@@ -520,10 +517,10 @@ async function handleLarkWebhook(req, res) {
             larkChatId: payload.event.message.chat_id,
           };
           
-          const current = readRequests();
+          const current = await readRequests();
           if (!current.some((saved) => saved.id === item.id)) {
             current.unshift(item);
-            writeRequests(current);
+            await writeRequests(current);
             
             const webhookUrl = process.env.LARK_WEBHOOK_URL;
             if (webhookUrl && /^https:\/\/open\.larksuite\.com\/open-apis\/bot\/v2\/hook\//.test(webhookUrl)) {
@@ -590,7 +587,7 @@ async function handleLineWebhook(req, res) {
     return send(res, 401, JSON.stringify({ ok: false, error: 'Invalid LINE signature' }));
   }
   const payload = JSON.parse(raw || '{}');
-  const current = readRequests();
+  const current = await readRequests();
   const known = new Set(current.map((item) => item.id));
   const incoming = [];
 
@@ -618,7 +615,7 @@ async function handleLineWebhook(req, res) {
   }
 
   current.unshift(...incoming.filter((item) => !current.some((saved) => saved.id === item.id)));
-  if (incoming.length) writeRequests(current);
+  if (incoming.length) await writeRequests(current);
   send(res, 200, JSON.stringify({ ok: true, received: incoming.length }));
 }
 
@@ -642,7 +639,7 @@ function validatedShareUrl(req, value) {
 
 async function handleLineDelivery(req, res) {
   const data = JSON.parse(await readBody(req) || '{}');
-  const requests = readRequests();
+  const requests = await readRequests();
   const request = requests.find((item) => item.id === String(data.requestId || ''));
   if (!request || request.source !== 'LINE') {
     return send(res, 404, JSON.stringify({ ok: false, error: 'ไม่พบคำขอ LINE นี้ กรุณาให้ผู้ใช้ส่งคำขอใหม่' }));
@@ -693,7 +690,7 @@ async function handleLineDelivery(req, res) {
   request.status = 'delivered';
   request.deliveredAt = new Date().toISOString();
   request.deliveryMethod = 'line-secure-share';
-  writeRequests(requests);
+  await writeRequests(requests);
   send(res, 200, JSON.stringify({ ok: true, deliveredTo: 'LINE' }));
 }
 
@@ -734,7 +731,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url === '/api/requests') {
       if (!requireAdminSession(req, res)) return;
-      return send(res, 200, JSON.stringify({ requests: readRequests() }));
+      return send(res, 200, JSON.stringify({ requests: await readRequests() }));
     }
     
     if (req.method === 'POST' && req.url === '/api/config/line') {
@@ -753,6 +750,7 @@ const server = http.createServer(async (req, res) => {
         lineReplyConfigured: Boolean(getLineConfig().accessToken),
         lineGroupRestricted: Boolean(getLineConfig().allowedGroupId),
         vaultSyncConfigured: Boolean(vaultStore),
+        requestStorePersistent: Boolean(process.env.DATABASE_URL),
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',
         larkInboundEnabled: true,
