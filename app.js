@@ -86,7 +86,6 @@ let remoteSyncConflict = false;
 let pendingRemoteUpload = false;
 let remoteSyncQueue = Promise.resolve();
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const glassMotionNodes = new WeakSet();
 
 function animateViewEntrance(view = activeView) {
   if (reducedMotion.matches) return;
@@ -97,24 +96,6 @@ function animateViewEntrance(view = activeView) {
   gsap.fromTo(targets,
     { autoAlpha: 0, y: 18, scale: 0.992 },
     { autoAlpha: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.055, ease: "power3.out", clearProps: "transform,opacity,visibility" });
-}
-
-function bindGlassMotion(root = document) {
-  if (reducedMotion.matches || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  const selector = ".stat-card, .panel, .generator-card, .health-hero, .risk-card, .collection-card, .member-stats article, .settings-card, .group-card, .vault-list";
-  $$(selector, root).forEach((element) => {
-    if (glassMotionNodes.has(element)) return;
-    glassMotionNodes.add(element);
-    element.addEventListener("pointermove", (event) => {
-      const bounds = element.getBoundingClientRect();
-      const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-      const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-      gsap.to(element, { rotateX: y * -1.8, rotateY: x * 1.8, y: -2, duration: 0.35, ease: "power2.out", transformPerspective: 900 });
-    });
-    element.addEventListener("pointerleave", () => {
-      gsap.to(element, { rotateX: 0, rotateY: 0, y: 0, duration: 0.55, ease: "elastic.out(1, 0.55)", clearProps: "transform" });
-    });
-  });
 }
 
 function initializeLiquidGlassMotion() {
@@ -635,7 +616,6 @@ function showView(view) {
   }
   requestAnimationFrame(() => {
     animateViewEntrance(activeView);
-    bindGlassMotion($(`#view-${activeView}`));
   });
 }
 
