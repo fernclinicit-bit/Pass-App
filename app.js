@@ -28,6 +28,7 @@ import {
 } from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
 import { createPortableShareUrl } from "./share-link.js";
+import { gsap } from "./node_modules/gsap/index.js";
 
 const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
 const THEME_KEY = "passly-theme";
@@ -84,6 +85,50 @@ let remoteSyncAvailable = false;
 let remoteSyncConflict = false;
 let pendingRemoteUpload = false;
 let remoteSyncQueue = Promise.resolve();
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const glassMotionNodes = new WeakSet();
+
+function animateViewEntrance(view = activeView) {
+  if (reducedMotion.matches) return;
+  const section = $(`#view-${view}`);
+  if (!section || section.hidden) return;
+  const targets = [...section.children];
+  gsap.killTweensOf(targets);
+  gsap.fromTo(targets,
+    { autoAlpha: 0, y: 18, scale: 0.992 },
+    { autoAlpha: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.055, ease: "power3.out", clearProps: "transform,opacity,visibility" });
+}
+
+function bindGlassMotion(root = document) {
+  if (reducedMotion.matches || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  const selector = ".stat-card, .panel, .generator-card, .health-hero, .risk-card, .collection-card, .member-stats article, .settings-card, .group-card, .vault-list";
+  $$(selector, root).forEach((element) => {
+    if (glassMotionNodes.has(element)) return;
+    glassMotionNodes.add(element);
+    element.addEventListener("pointermove", (event) => {
+      const bounds = element.getBoundingClientRect();
+      const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+      const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+      gsap.to(element, { rotateX: y * -1.8, rotateY: x * 1.8, y: -2, duration: 0.35, ease: "power2.out", transformPerspective: 900 });
+    });
+    element.addEventListener("pointerleave", () => {
+      gsap.to(element, { rotateX: 0, rotateY: 0, y: 0, duration: 0.55, ease: "elastic.out(1, 0.55)", clearProps: "transform" });
+    });
+  });
+}
+
+function initializeLiquidGlassMotion() {
+  const ambient = document.createElement("div");
+  ambient.className = "liquid-ambient";
+  ambient.setAttribute("aria-hidden", "true");
+  ambient.innerHTML = '<i class="liquid-orb liquid-orb-a"></i><i class="liquid-orb liquid-orb-b"></i><i class="liquid-orb liquid-orb-c"></i>';
+  document.body.prepend(ambient);
+  if (reducedMotion.matches) return;
+  gsap.to(".liquid-orb-a", { x: 90, y: 55, scale: 1.16, duration: 14, repeat: -1, yoyo: true, ease: "sine.inOut" });
+  gsap.to(".liquid-orb-b", { x: -70, y: 100, scale: 0.9, duration: 17, repeat: -1, yoyo: true, ease: "sine.inOut" });
+  gsap.to(".liquid-orb-c", { x: 65, y: -60, scale: 1.12, duration: 19, repeat: -1, yoyo: true, ease: "sine.inOut" });
+  gsap.fromTo(".lock-intro > *, .unlock-card", { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.75, stagger: 0.08, ease: "power3.out", delay: 0.08 });
+}
 
 function escapeHtml(value = "") {
   const element = document.createElement("div");
@@ -119,13 +164,22 @@ function toast(title, message) {
   $("#toastTitle").textContent = title;
   $("#toastMessage").textContent = message;
   $("#toast").classList.add("show");
+  if (!reducedMotion.matches) {
+    gsap.fromTo("#toast", { autoAlpha: 0, y: 18, scale: 0.97 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.38, ease: "back.out(1.7)", clearProps: "transform,opacity,visibility" });
+  }
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 2800);
 }
 
 function openModal(id) {
-  $(`#${id}`).hidden = false;
+  const backdrop = $(`#${id}`);
+  backdrop.hidden = false;
   document.body.style.overflow = "hidden";
+  if (!reducedMotion.matches) {
+    const modal = $(".modal", backdrop);
+    gsap.fromTo(backdrop, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.22, ease: "power2.out", clearProps: "opacity,visibility" });
+    gsap.fromTo(modal, { autoAlpha: 0, y: 24, scale: 0.965 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.46, ease: "back.out(1.35)", clearProps: "transform,opacity,visibility" });
+  }
 }
 
 function closeModal(id) {
@@ -574,7 +628,15 @@ function showView(view) {
   if (activeView === "security") renderSecurity();
   if (activeView === "generator") renderGeneratorHistory();
   history.replaceState(null, "", `#${activeView}`);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: reducedMotion.matches ? "auto" : "smooth" });
+  const activeNav = $(`.nav-item[data-view="${activeView}"]`);
+  if (activeNav && !reducedMotion.matches) {
+    gsap.fromTo(activeNav, { x: -7 }, { x: 0, duration: 0.42, ease: "back.out(2)", clearProps: "transform" });
+  }
+  requestAnimationFrame(() => {
+    animateViewEntrance(activeView);
+    bindGlassMotion($(`#view-${activeView}`));
+  });
 }
 
 function renderAll() {
@@ -2092,3 +2154,4 @@ const initialHash = location.hash.slice(1);
 if (pageTitles[initialHash]) activeView = initialHash;
 updateGenerator();
 refreshLockScreenMode();
+initializeLiquidGlassMotion();
