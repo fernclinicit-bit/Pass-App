@@ -42,6 +42,13 @@ async function waitForServer(url, child) {
   throw new Error("Passly server did not start in time");
 }
 
+function collectPostbackActions(value, result = []) {
+  if (!value || typeof value !== "object") return result;
+  if (value.action?.type === "postback") result.push(value.action);
+  for (const child of Object.values(value)) collectPostbackActions(child, result);
+  return result;
+}
+
 test("delivery menu offers LINE by default without Lark", async () => {
   const html = await fs.readFile(path.join(projectRoot, "index.html"), "utf8");
   const app = await fs.readFile(path.join(projectRoot, "app.js"), "utf8");
@@ -178,6 +185,78 @@ test("LINE password requests and secure delivery work end to end", async (contex
   assert.equal(submenuReply.body.messages[0].type, "flex");
   assert.equal(submenuReply.body.messages[0].contents.body.contents.length, 2);
   assert.match(submenuReply.body.messages[0].contents.body.contents[0].contents[0].action.data, /action=request/);
+
+  const catalogItems = [
+    ...Array.from({ length: 12 }, (_, index) => ({
+      id: `login-main-${index + 1}`,
+      system: "ระบบหลัก",
+      account: `บัญชี ${index + 1}`,
+      password: `must-not-be-stored-${index + 1}`,
+    })),
+    ...Array.from({ length: 12 }, (_, index) => ({
+      id: `login-system-${index + 1}`,
+      system: `ระบบ ${index + 1}`,
+      account: "บัญชีหลัก",
+      password: `must-not-be-stored-system-${index + 1}`,
+    })),
+  ];
+  const catalogResponse = await fetch(`${baseUrl}/api/line/catalog`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: adminCookie },
+    body: JSON.stringify({ items: catalogItems }),
+  });
+  assert.equal(catalogResponse.status, 200);
+  assert.equal((await catalogResponse.json()).count, 24);
+  const storedLineConfig = await fs.readFile(path.join(dataDir, "config.json"), "utf8");
+  assert.doesNotMatch(storedLineConfig, /must-not-be-stored/);
+
+  const completeMenuPayload = JSON.stringify({
+    events: [{
+      type: "message",
+      webhookEventId: "WEBHOOK-COMPLETE-MENU-1",
+      timestamp: Date.now(),
+      replyToken: "test-complete-menu-reply-token",
+      source: { type: "group", groupId: "C-test-group", userId: "U-test-user" },
+      message: { type: "text", id: "complete-menu-message-1", text: "เมนู" },
+    }],
+  });
+  const completeMenuSignature = crypto.createHmac("sha256", "test-line-secret").update(completeMenuPayload).digest("base64");
+  await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-line-signature": completeMenuSignature },
+    body: completeMenuPayload,
+  });
+  const completeMenuReply = lineCalls.find((call) => call.body?.replyToken === "test-complete-menu-reply-token");
+  assert.equal(completeMenuReply.body.messages[0].contents.type, "carousel");
+  assert.equal(completeMenuReply.body.messages[0].contents.contents.length, 2);
+  const completeMenuActions = collectPostbackActions(completeMenuReply.body.messages[0]);
+  assert.equal(completeMenuActions.length, 13);
+  const dynamicSubmenuAction = completeMenuActions.find((action) => action.data.includes("action=submenu"));
+  assert.ok(dynamicSubmenuAction);
+
+  const completeSubmenuPayload = JSON.stringify({
+    events: [{
+      type: "postback",
+      webhookEventId: "WEBHOOK-COMPLETE-SUBMENU-1",
+      timestamp: Date.now(),
+      replyToken: "test-complete-submenu-reply-token",
+      source: { type: "group", groupId: "C-test-group", userId: "U-test-user" },
+      postback: { data: dynamicSubmenuAction.data },
+    }],
+  });
+  const completeSubmenuSignature = crypto.createHmac("sha256", "test-line-secret").update(completeSubmenuPayload).digest("base64");
+  await fetch(`${baseUrl}/api/line/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-line-signature": completeSubmenuSignature },
+    body: completeSubmenuPayload,
+  });
+  const completeSubmenuReply = lineCalls.find((call) => call.body?.replyToken === "test-complete-submenu-reply-token");
+  assert.equal(completeSubmenuReply.body.messages[0].contents.type, "carousel");
+  assert.equal(completeSubmenuReply.body.messages[0].contents.contents.length, 2);
+  assert.equal(
+    collectPostbackActions(completeSubmenuReply.body.messages[0]).filter((action) => action.data.includes("action=request")).length,
+    12,
+  );
 
   const accountPayload = JSON.stringify({
     events: [{

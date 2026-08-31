@@ -593,6 +593,7 @@ function afterUnlock() {
   if (document.hidden || !document.hasFocus()) activatePrivacyShield();
   renderAll();
   showView(activeView);
+  syncLineMenuCatalog();
   pullLineRequests();
   clearInterval(lineInterval);
   lineInterval = setInterval(pullLineRequests, 5000);
@@ -1095,6 +1096,28 @@ async function sendLineDelivery({ requestId, itemName, expiresAt, shareUrl, pin 
   return result;
 }
 
+async function syncLineMenuCatalog() {
+  if (!vault) return false;
+  const items = loginItems().map((item) => ({
+    id: item.id,
+    system: item.name,
+    account: item.username || item.owner || item.purpose || "บัญชีหลัก",
+  }));
+  try {
+    const response = await fetch("/api/line/catalog", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    if (!response.ok) return false;
+    const result = await response.json();
+    $("#lineConfigStatus").dataset.catalogCount = String(result.count || 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function checkServerConfiguration() {
   try {
     const result = await fetch("/api/health", { cache: "no-store" }).then((response) => response.json());
@@ -1161,6 +1184,7 @@ async function reconnectLineRequests() {
   button.textContent = "กำลังเชื่อมต่อ…";
   try {
     await authenticateServerPin(pin);
+    await syncLineMenuCatalog();
     linePollReady = false;
     if (!await pullLineRequests()) throw new Error("โหลดรายการคำขอจาก Server ไม่สำเร็จ");
     toast("เชื่อมต่อ LINE แล้ว", "โหลดรายการคำขอล่าสุดเรียบร้อย");

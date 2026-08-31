@@ -43,6 +43,7 @@ function getLineConfig() {
     accessToken: localConfig.LINE_CHANNEL_ACCESS_TOKEN || process.env.LINE_CHANNEL_ACCESS_TOKEN,
     allowedGroupId: localConfig.LINE_ALLOWED_GROUP_ID || process.env.LINE_ALLOWED_GROUP_ID,
     groupName: localConfig.LINE_GROUP_NAME || process.env.LINE_GROUP_NAME || 'บัญชี 1',
+    menuCatalog: normalizeLineMenuCatalog(localConfig.LINE_MENU_CATALOG),
   };
 }
 
@@ -90,6 +91,11 @@ function readBody(req, limit = 50_000) {
     req.on('end', () => resolve(raw));
     req.on('error', reject);
   });
+}
+
+async function parseBody(req) {
+  const raw = await readBody(req);
+  return JSON.parse(raw || '{}');
 }
 
 function parseCookies(req) {
@@ -339,6 +345,108 @@ const requestAccountMenus = {
   ],
 };
 
+function normalizeLineMenuCatalog(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.slice(0, 500).flatMap((entry) => {
+    const id = String(entry?.id || '').trim().slice(0, 100);
+    const system = String(entry?.system || '').trim().slice(0, 100);
+    const account = String(entry?.account || '').trim().slice(0, 100);
+    if (!id || !system || seen.has(id) || !/^[A-Za-z0-9_-]+$/.test(id)) return [];
+    seen.add(id);
+    return [{ id, system, account: account || 'บัญชีหลัก' }];
+  });
+}
+
+function lineMenuGroups() {
+  const groups = new Map();
+  for (const item of getLineConfig().menuCatalog) {
+    const entries = groups.get(item.system) || [];
+    entries.push(item);
+    groups.set(item.system, entries);
+  }
+  return [...groups].map(([system, items]) => ({
+    key: crypto.createHash('sha256').update(system).digest('hex').slice(0, 12),
+    system,
+    items,
+  }));
+}
+
+function lineMenuButton(label, data) {
+  return {
+    type: 'button',
+    style: 'secondary',
+    height: 'sm',
+    action: {
+      type: 'postback',
+      label: String(label).slice(0, 20),
+      data: new URLSearchParams(data).toString(),
+    },
+  };
+}
+
+function lineMenuBubble(title, subtitle, choices, page, pageCount, includeBack = false) {
+  const rows = [];
+  for (let index = 0; index < choices.length; index += 2) {
+    rows.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: choices.slice(index, index + 2).map((choice) => lineMenuButton(choice.label, choice.data)),
+    });
+  }
+  if (includeBack) {
+    rows.push({
+      type: 'button',
+      style: 'link',
+      height: 'sm',
+      action: { type: 'postback', label: '← กลับเมนูหลัก', data: 'action=menu' },
+    });
+  }
+  return {
+    type: 'bubble',
+    size: 'kilo',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#102118',
+      paddingAll: 'lg',
+      contents: [
+        { type: 'text', text: 'PASSLY', color: '#D6FF51', size: 'xs', weight: 'bold' },
+        { type: 'text', text: title, color: '#FFFFFF', size: 'xl', weight: 'bold', margin: 'sm', wrap: true },
+        { type: 'text', text: subtitle, color: '#B8C8BF', size: 'sm', margin: 'xs', wrap: true },
+      ],
+    },
+    body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: 'md', contents: rows },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      paddingAll: 'md',
+      contents: [{ type: 'text', text: `หน้า ${page}/${pageCount} · แสดงครบทุกบัญชี`, color: '#6F8076', size: 'xs', align: 'center' }],
+    },
+    styles: { footer: { separator: true, separatorColor: '#DDE5DF' } },
+  };
+}
+
+function lineCatalogFlex(title, subtitle, choices, includeBack = false) {
+  const pageSize = includeBack ? 8 : 10;
+  const pages = [];
+  for (let index = 0; index < choices.length; index += pageSize) pages.push(choices.slice(index, index + pageSize));
+  const bubbles = pages.map((pageChoices, index) => lineMenuBubble(
+    title,
+    subtitle,
+    pageChoices,
+    index + 1,
+    pages.length,
+    includeBack,
+  ));
+  return {
+    type: 'flex',
+    altText: `${title} — ${choices.length} รายการ`,
+    contents: bubbles.length === 1 ? bubbles[0] : { type: 'carousel', contents: bubbles },
+  };
+}
+
 function isAllowedLineGroup(event) {
   if (event.source?.type !== 'group') return false;
   const allowedGroupId = getLineConfig().allowedGroupId;
@@ -346,6 +454,19 @@ function isAllowedLineGroup(event) {
 }
 
 function lineRequestMenu() {
+  const catalogGroups = lineMenuGroups();
+  if (catalogGroups.length) {
+    return lineCatalogFlex(
+      'เมนูขอ Password',
+      `เลือกจาก ${getLineConfig().menuCatalog.length} บัญชีใน Vault`,
+      catalogGroups.map((group) => ({
+        label: group.system,
+        data: group.items.length > 1
+          ? { action: 'submenu', group: group.key }
+          : { action: 'request', item: group.items[0].id },
+      })),
+    );
+  }
   const rows = [];
   for (let index = 0; index < requestSystems.length; index += 2) {
     rows.push({
@@ -407,6 +528,18 @@ function lineRequestMenu() {
 }
 
 function lineAccountMenu(system) {
+  const dynamicGroup = lineMenuGroups().find((group) => group.key === system);
+  if (dynamicGroup) {
+    return lineCatalogFlex(
+      dynamicGroup.system,
+      `เลือกบัญชีที่ต้องการขอ Password · ${dynamicGroup.items.length} บัญชี`,
+      dynamicGroup.items.map((item) => ({
+        label: item.account,
+        data: { action: 'request', item: item.id },
+      })),
+      true,
+    );
+  }
   const accounts = requestAccountMenus[system] || [];
   const rows = [];
   for (let index = 0; index < accounts.length; index += 2) {
@@ -532,8 +665,9 @@ function parseLineRequest(event) {
   if (event.type === 'postback') {
     const data = new URLSearchParams(event.postback?.data || '');
     if (data.get('action') !== 'request') return null;
-    const system = data.get('system') || 'ไม่ระบุระบบ';
-    const account = data.get('account') || '';
+    const catalogItem = getLineConfig().menuCatalog.find((item) => item.id === data.get('item'));
+    const system = catalogItem?.system || data.get('system') || 'ไม่ระบุระบบ';
+    const account = catalogItem?.account || data.get('account') || '';
     systemPart = account ? `${system} — ${account}` : system;
     reason = 'สมาชิกกดขอ Password จากเมนูในกลุ่ม LINE';
   } else if (event.type === 'message' && event.message?.type === 'text') {
@@ -568,7 +702,12 @@ function parseLineRequest(event) {
     lineGroupId: event.source?.groupId || null,
     lineGroupName: getLineConfig().groupName,
     requestAccount: event.type === 'postback'
-      ? new URLSearchParams(event.postback?.data || '').get('account') || null
+      ? (() => {
+        const data = new URLSearchParams(event.postback?.data || '');
+        return getLineConfig().menuCatalog.find((item) => item.id === data.get('item'))?.account
+          || data.get('account')
+          || null;
+      })()
       : null,
   };
 }
@@ -675,6 +814,29 @@ async function handleLineConfigWrite(req, res) {
   }
 }
 
+async function handleLineCatalogWrite(req, res) {
+  try {
+    const body = await parseBody(req);
+    const catalog = normalizeLineMenuCatalog(body.items);
+    if (!catalog.length && Array.isArray(body.items) && body.items.length) {
+      throw new Error('รายการเมนู LINE ไม่ถูกต้อง');
+    }
+    let localConfig = {};
+    if (fs.existsSync(configFile)) {
+      try {
+        localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      } catch (e) {}
+    }
+    localConfig.LINE_MENU_CATALOG = catalog;
+    localConfig.LINE_MENU_CATALOG_SYNCED_AT = new Date().toISOString();
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    send(res, 200, JSON.stringify({ ok: true, count: catalog.length }));
+  } catch (err) {
+    send(res, 400, JSON.stringify({ ok: false, error: err.message }));
+  }
+}
+
 async function handleLineWebhook(req, res) {
   const raw = await readBody(req);
   if (!verifyLineSignature(raw, req.headers['x-line-signature'])) {
@@ -704,9 +866,10 @@ async function handleLineWebhook(req, res) {
         continue;
       }
       if (data.get('action') === 'submenu') {
-        const system = data.get('system') || '';
-        if (requestAccountMenus[system]?.length > 1) {
-          await replyLine(event.replyToken, [lineAccountMenu(system)]);
+        const menuKey = data.get('group') || data.get('system') || '';
+        const dynamicGroup = lineMenuGroups().find((group) => group.key === menuKey);
+        if (dynamicGroup?.items.length > 1 || requestAccountMenus[menuKey]?.length > 1) {
+          await replyLine(event.replyToken, [lineAccountMenu(menuKey)]);
         }
         continue;
       }
@@ -847,6 +1010,10 @@ const server = http.createServer(async (req, res) => {
       if (!requireAdminSession(req, res)) return;
       return await handleLineConfigWrite(req, res);
     }
+    if (req.method === 'POST' && req.url === '/api/line/catalog') {
+      if (!requireAdminSession(req, res)) return;
+      return await handleLineCatalogWrite(req, res);
+    }
     if (req.method === 'POST' && req.url === '/api/line/deliver') {
       if (!requireAdminSession(req, res)) return;
       return await handleLineDelivery(req, res);
@@ -863,6 +1030,7 @@ const server = http.createServer(async (req, res) => {
         requestChannel: 'LINE',
         deliveryChannel: 'LINE',
         lineNestedAccountMenus: true,
+        lineMenuCatalogCount: getLineConfig().menuCatalog.length,
         larkInboundEnabled: true,
         larkConfigured: Boolean(process.env.LARK_WEBHOOK_URL),
       }));
