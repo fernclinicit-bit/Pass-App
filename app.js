@@ -28,6 +28,7 @@ import {
 } from "./vault-storage.js";
 import { readCredentialFile } from "./xlsx-reader.js";
 import { createPortableShareUrl } from "./share-link.js";
+import { requestItemMatchScore } from "./request-matching.js";
 import { gsap } from "./node_modules/gsap/index.js";
 
 const REQUEST_STORAGE_KEY = "passly-password-requests-v2";
@@ -996,10 +997,29 @@ async function openDeliverForRequest(requestId, presetItemId = null) {
   const form = $("#deliverForm");
   form.reset();
   form.elements.requestId.value = request.id;
-  $("#deliverSummary").textContent = `ผู้รับ: ${request.name} · ระบบ: ${request.system}`;
-  $("#deliverItemSelect").innerHTML = items.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} — ${escapeHtml(item.username || "ไม่มี Username")}</option>`).join("");
-  const match = presetItemId || items.find((item) => item.name.toLowerCase().includes(request.system.toLowerCase()) || request.system.toLowerCase().includes(item.name.toLowerCase()))?.id;
+  const rankedItems = items
+    .map((item) => ({ item, score: requestItemMatchScore(request, item) }))
+    .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name, "th"));
+  const suggested = rankedItems.filter((entry) => entry.score > 0);
+  const others = rankedItems.filter((entry) => entry.score === 0);
+  const optionMarkup = (entries) => entries.map(({ item }) => (
+    `<option value="${item.id}">${escapeHtml(item.name)} — ${escapeHtml(item.username || "ไม่มี Username")}</option>`
+  )).join("");
+  $("#deliverItemSelect").innerHTML = [
+    suggested.length ? `<optgroup label="ตรงกับคำขอ">${optionMarkup(suggested)}</optgroup>` : "",
+    others.length ? `<optgroup label="รายการอื่นใน Vault">${optionMarkup(others)}</optgroup>` : "",
+  ].join("");
+  const explicitMatch = presetItemId || request.requestVaultItemId;
+  const match = items.some((item) => item.id === explicitMatch)
+    ? explicitMatch
+    : rankedItems[0]?.score > 0
+      ? rankedItems[0].item.id
+      : null;
   if (match) form.elements.itemId.value = match;
+  const matchedItem = items.find((item) => item.id === match);
+  $("#deliverSummary").textContent = matchedItem
+    ? `ผู้รับ: ${request.name} · คำขอ: ${request.system} · ระบบแนะนำ: ${matchedItem.name} — ${matchedItem.username || "ไม่มี Username"}`
+    : `ผู้รับ: ${request.name} · ระบบ: ${request.system} · กรุณาเลือกบัญชีเพื่อตรวจสอบ`;
   form.elements.pin.value = generateSharePin();
   syncCustomExpiryControl(true);
   updateDeliverySubmitButton();

@@ -661,13 +661,14 @@ function parseLineRequest(event) {
   let systemPart = '';
   let reason = '';
   let sourceMessageId = event.webhookEventId;
+  let selectedCatalogItem = null;
 
   if (event.type === 'postback') {
     const data = new URLSearchParams(event.postback?.data || '');
     if (data.get('action') !== 'request') return null;
-    const catalogItem = getLineConfig().menuCatalog.find((item) => item.id === data.get('item'));
-    const system = catalogItem?.system || data.get('system') || 'ไม่ระบุระบบ';
-    const account = catalogItem?.account || data.get('account') || '';
+    selectedCatalogItem = getLineConfig().menuCatalog.find((item) => item.id === data.get('item')) || null;
+    const system = selectedCatalogItem?.system || data.get('system') || 'ไม่ระบุระบบ';
+    const account = selectedCatalogItem?.account || data.get('account') || '';
     systemPart = account ? `${system} — ${account}` : system;
     reason = 'สมาชิกกดขอ Password จากเมนูในกลุ่ม LINE';
   } else if (event.type === 'message' && event.message?.type === 'text') {
@@ -702,13 +703,11 @@ function parseLineRequest(event) {
     lineGroupId: event.source?.groupId || null,
     lineGroupName: getLineConfig().groupName,
     requestAccount: event.type === 'postback'
-      ? (() => {
-        const data = new URLSearchParams(event.postback?.data || '');
-        return getLineConfig().menuCatalog.find((item) => item.id === data.get('item'))?.account
-          || data.get('account')
-          || null;
-      })()
+      ? selectedCatalogItem?.account
+        || new URLSearchParams(event.postback?.data || '').get('account')
+        || null
       : null,
+    requestVaultItemId: selectedCatalogItem?.id || null,
   };
 }
 
