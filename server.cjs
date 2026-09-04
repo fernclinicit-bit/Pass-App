@@ -373,28 +373,38 @@ function lineMenuGroups() {
 }
 
 function lineMenuButton(label, data) {
+  const fullLabel = String(label || '-');
   return {
-    type: 'button',
-    style: 'secondary',
-    height: 'sm',
+    type: 'box',
+    layout: 'vertical',
+    justifyContent: 'center',
+    backgroundColor: '#F1F4F2',
+    cornerRadius: 'md',
+    paddingAll: 'sm',
+    height: '52px',
+    flex: 1,
+    contents: [{
+      type: 'text',
+      text: fullLabel,
+      size: 'xs',
+      color: '#102118',
+      weight: 'bold',
+      align: 'center',
+      gravity: 'center',
+      wrap: true,
+      maxLines: 3,
+    }],
     action: {
       type: 'postback',
-      label: String(label).slice(0, 20),
+      // LINE limits the action label, but the visible text above can show the full name.
+      label: fullLabel.slice(0, 20),
       data: new URLSearchParams(data).toString(),
     },
   };
 }
 
 function lineMenuBubble(title, subtitle, choices, page, pageCount, includeBack = false) {
-  const rows = [];
-  for (let index = 0; index < choices.length; index += 2) {
-    rows.push({
-      type: 'box',
-      layout: 'horizontal',
-      spacing: 'sm',
-      contents: choices.slice(index, index + 2).map((choice) => lineMenuButton(choice.label, choice.data)),
-    });
-  }
+  const rows = choices.map((choice) => lineMenuButton(choice.label, choice.data));
   if (includeBack) {
     rows.push({
       type: 'button',
@@ -429,7 +439,8 @@ function lineMenuBubble(title, subtitle, choices, page, pageCount, includeBack =
 }
 
 function lineCatalogFlex(title, subtitle, choices, includeBack = false) {
-  const pageSize = includeBack ? 8 : 10;
+  // One full-width choice per row keeps every label readable on narrow LINE screens.
+  const pageSize = includeBack ? 5 : 6;
   const pages = [];
   for (let index = 0; index < choices.length; index += pageSize) pages.push(choices.slice(index, index + pageSize));
   const bubbles = pages.map((pageChoices, index) => lineMenuBubble(
@@ -467,64 +478,17 @@ function lineRequestMenu() {
       })),
     );
   }
-  const rows = [];
-  for (let index = 0; index < requestSystems.length; index += 2) {
-    rows.push({
-      type: 'box',
-      layout: 'horizontal',
-      spacing: 'sm',
-      contents: requestSystems.slice(index, index + 2).map((system) => ({
-        type: 'button',
-        style: 'secondary',
-        height: 'sm',
-        action: {
-          type: 'postback',
-          label: system,
-          data: new URLSearchParams({
-            action: requestAccountMenus[system]?.length > 1 ? 'submenu' : 'request',
-            system,
-          }).toString(),
-        },
-      })),
-    });
-  }
-
-  return {
-    type: 'flex',
-    altText: 'เมนูขอ Password — เลือกบัญชีที่ต้องการ',
-    contents: {
-      type: 'bubble',
-      header: {
-        type: 'box',
-        layout: 'vertical',
-        backgroundColor: '#102118',
-        paddingAll: 'lg',
-        contents: [
-          { type: 'text', text: 'PASSLY', color: '#D6FF51', size: 'xs', weight: 'bold' },
-          { type: 'text', text: 'เมนูขอ Password', color: '#FFFFFF', size: 'xl', weight: 'bold', margin: 'sm' },
-          { type: 'text', text: 'เลือกบัญชีที่ต้องการใช้งาน', color: '#B8C8BF', size: 'sm', margin: 'xs' },
-        ],
+  return lineCatalogFlex(
+    'เมนูขอ Password',
+    'เลือกบัญชีที่ต้องการใช้งาน',
+    requestSystems.map((system) => ({
+      label: system,
+      data: {
+        action: requestAccountMenus[system]?.length > 1 ? 'submenu' : 'request',
+        system,
       },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'sm',
-        paddingAll: 'md',
-        contents: rows,
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        paddingAll: 'md',
-        contents: [
-          { type: 'text', text: 'กดหนึ่งครั้งเพื่อส่งคำขอให้ผู้ดูแล', color: '#6F8076', size: 'xs', align: 'center' },
-        ],
-      },
-      styles: {
-        footer: { separator: true, separatorColor: '#DDE5DF' },
-      },
-    },
-  };
+    })),
+  );
 }
 
 function lineAccountMenu(system) {
@@ -541,66 +505,15 @@ function lineAccountMenu(system) {
     );
   }
   const accounts = requestAccountMenus[system] || [];
-  const rows = [];
-  for (let index = 0; index < accounts.length; index += 2) {
-    rows.push({
-      type: 'box',
-      layout: 'horizontal',
-      spacing: 'sm',
-      contents: accounts.slice(index, index + 2).map((account) => ({
-        type: 'button',
-        style: 'secondary',
-        height: 'sm',
-        action: {
-          type: 'postback',
-          label: account,
-          data: new URLSearchParams({ action: 'request', system, account }).toString(),
-        },
-      })),
-    });
-  }
-
-  return {
-    type: 'flex',
-    altText: `เลือกบัญชี ${system}`,
-    contents: {
-      type: 'bubble',
-      header: {
-        type: 'box',
-        layout: 'vertical',
-        backgroundColor: '#102118',
-        paddingAll: 'lg',
-        contents: [
-          { type: 'text', text: 'PASSLY', color: '#D6FF51', size: 'xs', weight: 'bold' },
-          { type: 'text', text: system, color: '#FFFFFF', size: 'xl', weight: 'bold', margin: 'sm' },
-          { type: 'text', text: 'เลือกบัญชีที่ต้องการขอ Password', color: '#B8C8BF', size: 'sm', margin: 'xs' },
-        ],
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'sm',
-        paddingAll: 'md',
-        contents: rows,
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        paddingAll: 'md',
-        contents: [{
-          type: 'button',
-          style: 'link',
-          height: 'sm',
-          action: {
-            type: 'postback',
-            label: '← กลับเมนูหลัก',
-            data: new URLSearchParams({ action: 'menu' }).toString(),
-          },
-        }],
-      },
-      styles: { footer: { separator: true, separatorColor: '#DDE5DF' } },
-    },
-  };
+  return lineCatalogFlex(
+    system,
+    `เลือกบัญชีที่ต้องการขอ Password · ${accounts.length} บัญชี`,
+    accounts.map((account) => ({
+      label: account,
+      data: { action: 'request', system, account },
+    })),
+    true,
+  );
 }
 
 async function replyLine(replyToken, messages) {

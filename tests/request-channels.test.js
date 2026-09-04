@@ -160,7 +160,15 @@ test("LINE password requests and secure delivery work end to end", async (contex
   assert.equal(menuResponse.status, 200);
   const menuReply = lineCalls.find((call) => call.body?.replyToken === "test-menu-reply-token");
   assert.equal(menuReply.body.messages[0].type, "flex");
-  assert.equal(menuReply.body.messages[0].contents.body.contents.length, 6);
+  assert.equal(menuReply.body.messages[0].contents.type, "carousel");
+  assert.equal(menuReply.body.messages[0].contents.contents.length, 2);
+  assert.equal(menuReply.body.messages[0].contents.contents[0].body.contents.length, 6);
+  assert.ok(
+    menuReply.body.messages[0].contents.contents
+      .flatMap((bubble) => bubble.body.contents)
+      .every((row) => row.type === "box" && row.layout === "vertical"),
+    "every main-menu choice should occupy one full-width row",
+  );
   assert.equal(menuReply.body.messages[0].quickReply, undefined);
 
   const submenuPayload = JSON.stringify({
@@ -183,9 +191,10 @@ test("LINE password requests and secure delivery work end to end", async (contex
   assert.equal((await submenuResponse.json()).received, 0);
   const submenuReply = lineCalls.find((call) => call.body?.replyToken === "test-submenu-reply-token");
   assert.equal(submenuReply.body.messages[0].type, "flex");
-  assert.equal(submenuReply.body.messages[0].contents.body.contents.length, 2);
-  assert.match(submenuReply.body.messages[0].contents.body.contents[0].contents[0].action.data, /action=request/);
+  assert.equal(submenuReply.body.messages[0].contents.body.contents.length, 4);
+  assert.match(submenuReply.body.messages[0].contents.body.contents[0].action.data, /action=request/);
 
+  const longSystemName = "ระบบจัดการบัญชีโฆษณาสำหรับคลินิก";
   const catalogItems = [
     ...Array.from({ length: 12 }, (_, index) => ({
       id: `login-main-${index + 1}`,
@@ -195,7 +204,7 @@ test("LINE password requests and secure delivery work end to end", async (contex
     })),
     ...Array.from({ length: 12 }, (_, index) => ({
       id: `login-system-${index + 1}`,
-      system: `ระบบ ${index + 1}`,
+      system: index === 11 ? longSystemName : `ระบบ ${index + 1}`,
       account: "บัญชีหลัก",
       password: `must-not-be-stored-system-${index + 1}`,
     })),
@@ -228,7 +237,16 @@ test("LINE password requests and secure delivery work end to end", async (contex
   });
   const completeMenuReply = lineCalls.find((call) => call.body?.replyToken === "test-complete-menu-reply-token");
   assert.equal(completeMenuReply.body.messages[0].contents.type, "carousel");
-  assert.equal(completeMenuReply.body.messages[0].contents.contents.length, 2);
+  assert.equal(completeMenuReply.body.messages[0].contents.contents.length, 3);
+  assert.match(JSON.stringify(completeMenuReply.body.messages[0]), new RegExp(longSystemName));
+  assert.ok(
+    completeMenuReply.body.messages[0].contents.contents
+      .flatMap((bubble) => bubble.body.contents)
+      .some((button) => button.contents?.[0]?.text === longSystemName
+        && button.contents[0].size === "xs"
+        && button.contents[0].wrap === true),
+    "long menu labels should be shown in full with small wrapping text",
+  );
   const completeMenuActions = collectPostbackActions(completeMenuReply.body.messages[0]);
   assert.equal(completeMenuActions.length, 13);
   const dynamicSubmenuAction = completeMenuActions.find((action) => action.data.includes("action=submenu"));
@@ -252,7 +270,7 @@ test("LINE password requests and secure delivery work end to end", async (contex
   });
   const completeSubmenuReply = lineCalls.find((call) => call.body?.replyToken === "test-complete-submenu-reply-token");
   assert.equal(completeSubmenuReply.body.messages[0].contents.type, "carousel");
-  assert.equal(completeSubmenuReply.body.messages[0].contents.contents.length, 2);
+  assert.equal(completeSubmenuReply.body.messages[0].contents.contents.length, 3);
   assert.equal(
     collectPostbackActions(completeSubmenuReply.body.messages[0]).filter((action) => action.data.includes("action=request")).length,
     12,
