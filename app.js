@@ -1108,6 +1108,7 @@ function openGroupEditor(id = null) {
 async function sendLineDelivery({ requestId, itemName, expiresAt, shareUrl, pin }) {
   const response = await fetch("/api/line/deliver", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ requestId, itemName, expiresAt, shareUrl, pin }),
   });
@@ -1126,6 +1127,7 @@ async function syncLineMenuCatalog() {
   try {
     const response = await fetch("/api/line/catalog", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
     });
@@ -1156,7 +1158,10 @@ async function checkServerConfiguration() {
 async function pullLineRequests() {
   if (!vault) return false;
   try {
-    const response = await fetch("/api/requests", { cache: "no-store" });
+    const response = await fetch("/api/requests", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
       const error = new Error(
@@ -2046,6 +2051,7 @@ $("#lineConfigForm").addEventListener("submit", async (e) => {
   try {
     const response = await fetch('/api/config/line', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret, token, groupId })
     });

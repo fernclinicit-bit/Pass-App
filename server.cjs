@@ -718,7 +718,8 @@ async function handleLineConfigWrite(req, res) {
     localConfig.LINE_CHANNEL_SECRET = secret || '';
     localConfig.LINE_CHANNEL_ACCESS_TOKEN = token || '';
     localConfig.LINE_ALLOWED_GROUP_ID = groupId || '';
-    
+
+    fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
     send(res, 200, JSON.stringify({ ok: true }));
   } catch (err) {
