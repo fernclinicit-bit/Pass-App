@@ -253,17 +253,33 @@ export async function sha256Reference(value, bytes = 6) {
     .join("");
 }
 
+async function compressShareData(bytes) {
+  if (!("CompressionStream" in globalThis)) return null;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function decompressShareData(bytes) {
+  if (!("DecompressionStream" in globalThis)) {
+    throw new Error("เบราว์เซอร์นี้ไม่รองรับลิงก์ Share รูปแบบบีบอัด");
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 export async function createSharePayload(data, pin) {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
   const key = await deriveVaultKey(pin, salt, SHARE_KDF_ITERATIONS);
+  const plainBytes = encoder.encode(JSON.stringify(data));
+  const compressed = await compressShareData(plainBytes);
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    encoder.encode(JSON.stringify(data)),
+    compressed || plainBytes,
   );
   const payload = {
-    v: 1,
+    v: compressed ? 2 : 1,
     kdf: SHARE_KDF_ITERATIONS,
     s: bytesToBase64Url(salt),
     i: bytesToBase64Url(iv),
@@ -283,7 +299,10 @@ export async function openSharePayload(fragment, pin) {
     key,
     base64UrlToBytes(payload.d),
   );
-  const data = JSON.parse(decoder.decode(decrypted));
+  const decoded = payload.v === 2
+    ? await decompressShareData(new Uint8Array(decrypted))
+    : new Uint8Array(decrypted);
+  const data = JSON.parse(decoder.decode(decoded));
   if (new Date(data.expiresAt) <= new Date()) throw new Error("ลิงก์นี้หมดอายุแล้ว");
   return data;
 }
