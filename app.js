@@ -78,8 +78,6 @@ let lineInterval = null;
 let linePollReady = false;
 let lineReconnectBusy = false;
 let lockInProgress = false;
-let releaseVaultTabLock = null;
-let vaultTabLockTask = null;
 let requests = loadRequests();
 let remoteVaultRevision = null;
 let remoteSyncAvailable = false;
@@ -353,37 +351,6 @@ function getStoredEnvelope() {
   return readVaultEnvelope(localStorage);
 }
 
-async function acquireVaultTabLock() {
-  if (!navigator.locks?.request) return true;
-  if (releaseVaultTabLock) return true;
-
-  let resolveAvailability;
-  const availability = new Promise((resolve) => { resolveAvailability = resolve; });
-  vaultTabLockTask = navigator.locks.request(
-    "passly-active-vault",
-    { ifAvailable: true },
-    async (lock) => {
-      if (!lock) {
-        resolveAvailability(false);
-        return;
-      }
-      resolveAvailability(true);
-      await new Promise((resolve) => { releaseVaultTabLock = resolve; });
-      releaseVaultTabLock = null;
-    },
-  ).catch((error) => {
-    console.warn("Unable to coordinate the active Passly tab.", error);
-    resolveAvailability(true);
-  });
-  return availability;
-}
-
-function releaseActiveVaultTab() {
-  releaseVaultTabLock?.();
-  releaseVaultTabLock = null;
-  vaultTabLockTask = null;
-}
-
 function createEmptyVault() {
   let legacyShareSettings = {};
   try { legacyShareSettings = JSON.parse(localStorage.getItem("passly-lark") || "{}"); } catch { /* ignore */ }
@@ -580,7 +547,6 @@ async function lockVault(reason = "ออกจากระบบแล้ว", 
     document.body.style.overflow = "";
     setLockScreenMode();
     $("#unlockError").hidden = true;
-    releaseActiveVaultTab();
     lockInProgress = false;
     if (reason) toast("ออกจากระบบ Passly", reason);
   }
@@ -1314,13 +1280,8 @@ $("#setupForm").addEventListener("submit", async (event) => {
   const secretInputs = [...form.querySelectorAll('input[type="password"]')];
   secretInputs.forEach((input) => { input.disabled = true; });
   button.disabled = true;
-  button.textContent = "กำลังตรวจสอบแท็บ…";
+  button.textContent = "กำลังตรวจ PIN กับ Server…";
   try {
-    if (!await acquireVaultTabLock()) {
-      toast("Passly เปิดอยู่ในแท็บอื่น", "กรุณาปิดแท็บ Passly อื่นก่อนสร้าง Vault");
-      return;
-    }
-    button.textContent = "กำลังตรวจ PIN กับ Server…";
     await authenticateServerPin(enteredSecret);
     button.textContent = "กำลังตรวจสอบ Vault กลาง…";
     await prepareRemoteVaultForUnlock();
@@ -1350,7 +1311,6 @@ $("#setupForm").addEventListener("submit", async (event) => {
     afterUnlock();
     toast("สร้าง Passly Vault แล้ว", "ข้อมูลพร้อมบันทึกแบบเข้ารหัส");
   } catch (error) {
-    releaseActiveVaultTab();
     vault = null;
     vaultKey = null;
     vaultEnvelope = null;
@@ -1374,15 +1334,9 @@ $("#unlockForm").addEventListener("submit", async (event) => {
   let serverPinVerified = false;
   secretInput.disabled = true;
   button.disabled = true;
-  button.textContent = "กำลังตรวจสอบแท็บ…";
+  button.textContent = "กำลังตรวจ PIN กับ Server…";
   $("#unlockError").hidden = true;
   try {
-    if (!await acquireVaultTabLock()) {
-      $("#unlockError").textContent = "Passly เปิดใช้งานอยู่ในแท็บอื่น กรุณาปิดแท็บนั้นก่อน";
-      $("#unlockError").hidden = false;
-      return;
-    }
-    button.textContent = "กำลังตรวจ PIN กับ Server…";
     await authenticateServerPin(enteredSecret);
     serverPinVerified = true;
     button.textContent = "กำลังโหลด Vault กลาง…";
@@ -1434,7 +1388,6 @@ $("#unlockForm").addEventListener("submit", async (event) => {
     }
   } catch (error) {
     console.error("Vault unlock failed after server PIN verification.", error);
-    releaseActiveVaultTab();
     $("#unlockError").textContent = serverPinVerified
       ? "PIN ถูกต้องสำหรับ Server แต่ Vault นี้อาจสร้างด้วย PIN เดิม กรุณากู้คืน Backup หรือเก็บ Vault เดิมก่อนสร้างใหม่"
       : error.message || "PIN ไม่ถูกต้อง";
@@ -2101,7 +2054,6 @@ async function resetVaultStorage() {
   vault = null;
   vaultKey = null;
   vaultEnvelope = null;
-  releaseActiveVaultTab();
   location.reload();
 }
 

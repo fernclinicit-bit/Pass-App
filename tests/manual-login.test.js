@@ -40,7 +40,7 @@ test("privacy shield hides an unlocked vault when capture-related focus is lost"
   assert.match(appSource, /if \(document\.hidden \|\| !document\.hasFocus\(\)\) activatePrivacyShield\(\)/);
 });
 
-test("login targets the submit button and allows only one active tab", () => {
+test("login targets the submit button and allows simultaneous active tabs", () => {
   assert.match(
     appSource,
     /const form = event\.currentTarget;/,
@@ -48,8 +48,8 @@ test("login targets the submit button and allows only one active tab", () => {
   assert.match(appSource, /form\.querySelector\('button\[type="submit"\]'\)/);
   assert.match(appSource, /form\.reset\(\);/);
   assert.doesNotMatch(appSource, /event\.currentTarget\.reset\(\);/);
-  assert.match(appSource, /navigator\.locks\.request/);
-  assert.match(appSource, /Passly เปิดใช้งานอยู่ในแท็บอื่น/);
+  assert.doesNotMatch(appSource, /navigator\.locks\.request/);
+  assert.doesNotMatch(appSource, /Passly เปิดใช้งานอยู่ในแท็บอื่น/);
   assert.match(pageSource, /id="resetFromLock"/);
   assert.match(pageSource, /id="resetVaultModal"/);
   assert.match(pageSource, /id="resetVaultForm"/);
