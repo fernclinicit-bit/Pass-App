@@ -26,6 +26,8 @@ const {
 const { createRequestStore } = require('./request-store.cjs');
 const { unlockVaultEnvelope, encryptVault } = require('./vault-crypto-node.cjs');
 const { createUserStore } = require('./user-store.cjs');
+const { loadAdminPinHash } = require('./security-config.cjs');
+const { createHealthReport } = require('./health-contract.cjs');
 
 const root = __dirname;
 const port = process.env.PORT || 3030;
@@ -78,9 +80,7 @@ function getLarkConfig() {
 
 const lineApiBaseUrl = (process.env.LINE_API_BASE_URL || 'https://api.line.me').replace(/\/+$/, '');
 const larkApiBaseUrl = (process.env.LARK_API_BASE_URL || 'https://open.larksuite.com').replace(/\/+$/, '');
-const defaultAdminPinHash = 'scrypt-v1$16384$8$1$Maked4P-5UUfEHzd5GwhSA$SSTE_ObX1teki8dujJ95xFhSbpPOC2oYxiHG0xsCfgqLvTQH-70yiYj4l0HU5qVtKk-tSYhFvh4eaf0F89QWmA'; // 'admin'
-const legacyPinHash = 'scrypt-v1$16384$8$1$ThGLnqAg6XvTUU2ntycp_w$mWhPwfaQxnOyo3rQLMmKD0FrF5BW6xpfMmiFxNkkNpY71ZbK7754SXwoCSF6oOF3yrMYxCRO2L7-3HGzByyalA'; // '664749'
-const adminPinHash = String(process.env.PASSLY_ADMIN_PIN_HASH || legacyPinHash).trim();
+const adminPinHash = loadAdminPinHash();
 const adminSessionCookie = 'passly_admin_session';
 const authWindowMs = 15 * 60 * 1000;
 const authAttemptLimit = 5;
@@ -243,9 +243,6 @@ async function handleAdminPinAuth(req, res) {
   const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
 
   let valid = await verifyPinHash(pin, adminPinHash);
-  if (!valid) valid = await verifyPinHash(pin, defaultAdminPinHash);
-  if (!valid) valid = await verifyPinHash(pin, legacyPinHash);
-  if (!valid && (pin === 'admin' || pin === '664749')) valid = true;
   if (!valid && userStore && email) {
     try {
       const users = await userStore.get();
@@ -352,13 +349,11 @@ async function handleDemoVaultRead(res) {
     if (vaultStore) {
       const current = await vaultStore.get();
       if (current && current.envelope) {
-        const pin = process.env.ADMIN_PIN || '664749';
+        const pin = process.env.ADMIN_PIN || '';
         let unlocked = null;
-        try {
-          unlocked = await unlockVaultEnvelope(current.envelope, pin);
-        } catch {
+        if (pin) {
           try {
-            unlocked = await unlockVaultEnvelope(current.envelope, 'admin');
+            unlocked = await unlockVaultEnvelope(current.envelope, pin);
           } catch {}
         }
         if (unlocked && unlocked.vault) {
@@ -1672,8 +1667,8 @@ async function handleTelegramWebhook(req, res) {
           return send(res, 200, JSON.stringify({ ok: true }));
         }
 
-        const botEmail = process.env.AUTO_DELIVER_BOT_EMAIL || 'admin';
-        const botPassword = process.env.AUTO_DELIVER_BOT_PASSWORD || '664749';
+        const botEmail = process.env.AUTO_DELIVER_BOT_EMAIL || '';
+        const botPassword = process.env.AUTO_DELIVER_BOT_PASSWORD || '';
 
         const envelope = await vaultStore.get();
         if (!envelope) {
@@ -1933,7 +1928,7 @@ const server = http.createServer(async (req, res) => {
       return await handleLarkDelivery(req, res);
     }
     if (req.method === 'GET' && req.url === '/api/health') {
-      return send(res, 200, JSON.stringify({
+      const details = {
         ok: true,
         adminPinConfigured: Boolean(adminPinHash),
         lineConfigured: Boolean(getLineConfig().channelSecret),
@@ -1953,7 +1948,17 @@ const server = http.createServer(async (req, res) => {
         larkMenuCatalogCount: getLarkConfig().menuCatalog.length,
         telegramConfigured: Boolean(getTelegramConfig().botToken),
         telegramChatRestricted: Boolean(getTelegramConfig().allowedChatId),
-      }));
+      };
+      const report = createHealthReport({
+        service: 'passly-password-request',
+        version: '1.0.0',
+        checks: {
+          adminAuth: { status: adminPinHash ? 'ok' : 'error' },
+          requestStore: { status: requestStore ? 'ok' : 'error', persistent: Boolean(process.env.DATABASE_URL) },
+          vaultStore: { status: vaultStore ? 'ok' : 'error' },
+        },
+      });
+      return send(res, report.status === 'ok' ? 200 : 503, JSON.stringify({ ...report, ...details }));
     }
 
     const target = req.url === '/' ? '/index.html' : req.url.split('?')[0];
