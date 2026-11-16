@@ -20,7 +20,7 @@
     <div class="lock-layout">
       <div class="lock-intro">
         <a class="brand lock-brand" href="#"><span class="brand-mark"><i></i><i></i><i></i></span><span>passly</span></a>
-        <p class="eyebrow">Fern Clinic Password Manager</p>
+        <p class="eyebrow">Passly Password Manager</p>
         <h1>รหัสทุกบัญชี<br><span>อยู่ในที่เดียว</span></h1>
         <p>Vault เข้ารหัสบนอุปกรณ์ จัดหมวดหมู่ ตรวจรหัสซ้ำ และแจกข้อมูลผ่านลิงก์ Passly ที่ป้องกันด้วย PIN</p>
         <div class="lock-features">
@@ -78,7 +78,7 @@
         <a class="brand" href="#dashboard"><span class="brand-mark"><i></i><i></i><i></i></span><span>passly</span></a>
         <button class="sidebar-close" id="sidebarCloseBtn" type="button" aria-label="ปิดเมนู">✕</button>
       </div>
-      <div class="workspace-switch"><span class="avatar">FN</span><div><strong>Fern Clinic</strong><small>Organization Vault</small></div><span>⌄</span></div>
+      <div class="workspace-switch"><span class="avatar">P</span><div><strong>Passly</strong><small>Organization Vault</small></div><span>⌄</span></div>
       <nav class="nav" aria-label="เมนูหลัก">
         <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span> ภาพรวม</button>
         <button class="nav-item" data-view="vault"><span class="nav-icon">▣</span> Vault <span class="nav-count" id="navVaultCount">0</span></button>
@@ -99,7 +99,7 @@
           <div class="sync-state" id="syncState" data-state="checking"><span></span><strong id="syncStatus">กำลังตรวจสอบการซิงก์…</strong></div>
         </div>
         <button class="lock-btn" id="lockVaultBtn" type="button"><span>⌁</span> ออกจากระบบ</button>
-        <div class="user-card"><span class="avatar">FN</span><span><strong>Fern Clinic</strong><small>ผู้ดูแลระบบ</small></span></div>
+        <div class="user-card"><span class="avatar">P</span><span><strong>Passly</strong><small>ผู้ดูแลระบบ</small></span></div>
       </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
@@ -136,7 +136,7 @@
 
         <section class="view" id="view-dashboard">
           <div class="hero-row">
-            <div><p class="eyebrow">Password security workspace</p><h1>สวัสดี, Fern <span>✦</span></h1><p class="subtitle">Vault ถูกปลดล็อกและพร้อมจัดการข้อมูลเข้าใช้งาน</p></div>
+            <div><p class="subtitle">Vault ถูกปลดล็อกและพร้อมจัดการข้อมูลเข้าใช้งาน</p></div>
             <div class="date-pill" id="today"></div>
           </div>
           <section class="stats-grid">
@@ -355,11 +355,6 @@
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="resetVaultTitle"><button class="modal-close" data-close-modal="resetVaultModal">×</button><p class="eyebrow">Encrypted backup first</p><h2 id="resetVaultTitle">เก็บ Vault เดิมและสร้างใหม่</h2><p>Passly จะดาวน์โหลด Vault ปัจจุบันเป็น Backup เข้ารหัส และจะไม่เขียนทับ Archive รุ่นเก่าที่เก็บไว้ในเบราว์เซอร์</p><form id="resetVaultForm"><label>พิมพ์ RESET เพื่อยืนยัน<input name="confirmation" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="RESET" /></label><p class="form-error" id="resetVaultError" hidden></p><button class="primary-btn full" type="submit">เก็บ Backup และสร้าง Vault ใหม่</button></form></section>
   </div>
 
-  <div class="screen-watermark" id="screenWatermark" aria-hidden="true">
-    <span>FERN CLINIC · CONFIDENTIAL</span>
-    <span>FERN CLINIC · CONFIDENTIAL</span>
-    <span>FERN CLINIC · CONFIDENTIAL</span>
-  </div>
 
   <div class="privacy-shield" id="privacyShield" role="status" aria-live="polite" aria-hidden="true" hidden>
     <div class="privacy-shield-card">

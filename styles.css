@@ -219,7 +219,6 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 2px 5px; backg
 .line-alert button { border: 1px solid currentColor; border-radius: 6px; padding: 5px 8px; background: transparent; color: inherit; font-size: 9px; cursor: pointer; }
 .hero-row, .view-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .hero-row h1, .view-header h1 { margin: 0; font-size: 31px; letter-spacing: -1px; }
-.hero-row h1 span { color: var(--lime-deep); font-size: 22px; }
 .subtitle, .view-header p:not(.eyebrow) { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .date-pill { border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; background: #e9ede7; color: #687169; font-size: 10px; }
 
@@ -459,26 +458,6 @@ input[type="range"] { width: 100%; height: 20px; padding: 0; border: 0; box-shad
 .toast.show { opacity: 1; transform: none; }
 .toast > span { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: var(--lime); color: #172019; font-size: 10px; }
 .toast strong, .toast small { display: block; }.toast strong { font-size: 10px; }.toast small { margin-top: 2px; color: #aeb8b0; font-size: 8px; }
-
-.screen-watermark {
-  position: fixed;
-  inset: 0;
-  z-index: 75;
-  display: none;
-  place-content: space-around;
-  overflow: hidden;
-  pointer-events: none;
-  user-select: none;
-}
-body.vault-open .screen-watermark { display: grid; }
-.screen-watermark span {
-  color: rgba(35, 54, 42, .075);
-  font: 700 clamp(18px, 3vw, 42px)/1 Manrope, sans-serif;
-  letter-spacing: .18em;
-  white-space: nowrap;
-  transform: rotate(-24deg);
-}
-body.dark .screen-watermark span { color: rgba(214, 245, 94, .07); }
 
 .privacy-shield {
   position: fixed;
