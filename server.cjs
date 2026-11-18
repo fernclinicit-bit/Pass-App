@@ -28,21 +28,16 @@ const { scheduleAutoApproval, createAutoApprovalProcessor } = require('./lark-au
 const { createReadRecallProcessor } = require('./lark-message-recall.cjs');
 const { unlockVaultEnvelope, encryptVault } = require('./vault-crypto-node.cjs');
 const { createUserStore } = require('./user-store.cjs');
+const { createConfigStore } = require('./config-store.cjs');
 
 const root = __dirname;
 const port = process.env.PORT || 3030;
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const requestFile = path.join(dataDir, 'requests.json');
 const configFile = path.join(dataDir, 'config.json');
+const configStore = createConfigStore(process.env.DATABASE_URL, configFile);
 function getLineConfig() {
-  let localConfig = {};
-  try {
-    if (fs.existsSync(configFile)) {
-      localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    }
-  } catch (e) {
-    console.error('Error reading config.json:', e);
-  }
+  const localConfig = readLocalConfig();
   return {
     channelSecret: localConfig.LINE_CHANNEL_SECRET || process.env.LINE_CHANNEL_SECRET,
     accessToken: localConfig.LINE_CHANNEL_ACCESS_TOKEN || process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -53,12 +48,7 @@ function getLineConfig() {
 }
 
 function readLocalConfig() {
-  try {
-    return fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile, 'utf8')) : {};
-  } catch (e) {
-    console.error('Error reading config.json:', e);
-    return {};
-  }
+  return configStore.getSync();
 }
 
 function getLarkConfig() {
@@ -1376,17 +1366,11 @@ async function handleLineConfigWrite(req, res) {
   try {
     const body = await parseBody(req);
     const { secret, token, groupId } = body;
-    let localConfig = {};
-    if (fs.existsSync(configFile)) {
-      try {
-        localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-      } catch (e) {}
-    }
-    localConfig.LINE_CHANNEL_SECRET = secret || '';
-    localConfig.LINE_CHANNEL_ACCESS_TOKEN = token || '';
-    localConfig.LINE_ALLOWED_GROUP_ID = groupId || '';
-    
-    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    await configStore.update((config) => {
+      config.LINE_CHANNEL_SECRET = secret || '';
+      config.LINE_CHANNEL_ACCESS_TOKEN = token || '';
+      config.LINE_ALLOWED_GROUP_ID = groupId || '';
+    });
     send(res, 200, JSON.stringify({ ok: true }));
   } catch (err) {
     send(res, 400, JSON.stringify({ ok: false, error: err.message }));
@@ -1400,16 +1384,10 @@ async function handleLineCatalogWrite(req, res) {
     if (!catalog.length && Array.isArray(body.items) && body.items.length) {
       throw new Error('รายการเมนู LINE ไม่ถูกต้อง');
     }
-    let localConfig = {};
-    if (fs.existsSync(configFile)) {
-      try {
-        localConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-      } catch (e) {}
-    }
-    localConfig.LINE_MENU_CATALOG = catalog;
-    localConfig.LINE_MENU_CATALOG_SYNCED_AT = new Date().toISOString();
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    await configStore.update((config) => {
+      config.LINE_MENU_CATALOG = catalog;
+      config.LINE_MENU_CATALOG_SYNCED_AT = new Date().toISOString();
+    });
     send(res, 200, JSON.stringify({ ok: true, count: catalog.length }));
   } catch (err) {
     send(res, 400, JSON.stringify({ ok: false, error: err.message }));
@@ -1419,15 +1397,14 @@ async function handleLineCatalogWrite(req, res) {
 async function handleLarkConfigWrite(req, res) {
   try {
     const body = await parseBody(req);
-    const localConfig = readLocalConfig();
-    localConfig.LARK_APP_ID = String(body.appId || '').trim();
-    localConfig.LARK_APP_SECRET = String(body.appSecret || '').trim();
-    localConfig.LARK_VERIFICATION_TOKEN = String(body.verificationToken || '').trim();
-    localConfig.LARK_WEBHOOK_URL = String(body.webhookUrl || '').trim();
-    localConfig.LARK_ALLOWED_CHAT_ID = String(body.chatId || '').trim();
-    if (localConfig.LARK_WEBHOOK_URL && !isValidLarkWebhook(localConfig.LARK_WEBHOOK_URL)) throw new Error('Lark Incoming Webhook ไม่ถูกต้อง');
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    await configStore.update((config) => {
+      config.LARK_APP_ID = String(body.appId || '').trim();
+      config.LARK_APP_SECRET = String(body.appSecret || '').trim();
+      config.LARK_VERIFICATION_TOKEN = String(body.verificationToken || '').trim();
+      config.LARK_WEBHOOK_URL = String(body.webhookUrl || '').trim();
+      config.LARK_ALLOWED_CHAT_ID = String(body.chatId || '').trim();
+      if (config.LARK_WEBHOOK_URL && !isValidLarkWebhook(config.LARK_WEBHOOK_URL)) throw new Error('Lark Incoming Webhook ไม่ถูกต้อง');
+    });
     larkTokenCache = { token: '', expiresAt: 0 };
     send(res, 200, JSON.stringify({ ok: true }));
   } catch (err) { send(res, 400, JSON.stringify({ ok: false, error: err.message })); }
@@ -1438,11 +1415,10 @@ async function handleLarkCatalogWrite(req, res) {
     const body = await parseBody(req);
     const catalog = normalizeLineMenuCatalog(body.items);
     if (!catalog.length && Array.isArray(body.items) && body.items.length) throw new Error('รายการเมนู Lark ไม่ถูกต้อง');
-    const localConfig = readLocalConfig();
-    localConfig.LARK_MENU_CATALOG = catalog;
-    localConfig.LARK_MENU_CATALOG_SYNCED_AT = new Date().toISOString();
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    await configStore.update((config) => {
+      config.LARK_MENU_CATALOG = catalog;
+      config.LARK_MENU_CATALOG_SYNCED_AT = new Date().toISOString();
+    });
     send(res, 200, JSON.stringify({ ok: true, count: catalog.length }));
   } catch (err) { send(res, 400, JSON.stringify({ ok: false, error: err.message })); }
 }
@@ -1863,11 +1839,10 @@ async function handleTelegramConfigWrite(req, res) {
   if (!requireAdminSession(req, res)) return;
   try {
     const body = JSON.parse(await readBody(req) || '{}');
-    const localConfig = readLocalConfig();
-    localConfig.TELEGRAM_BOT_TOKEN = String(body.botToken || '').trim();
-    localConfig.TELEGRAM_ALLOWED_CHAT_ID = String(body.chatId || '').trim();
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(localConfig, null, 2));
+    await configStore.update((config) => {
+      config.TELEGRAM_BOT_TOKEN = String(body.botToken || '').trim();
+      config.TELEGRAM_ALLOWED_CHAT_ID = String(body.chatId || '').trim();
+    });
     send(res, 200, JSON.stringify({ ok: true }));
   } catch (err) {
     send(res, 400, JSON.stringify({ ok: false, error: err.message }));
@@ -1990,6 +1965,7 @@ const server = http.createServer(async (req, res) => {
         lineGroupRestricted: Boolean(getLineConfig().allowedGroupId),
         vaultSyncConfigured: Boolean(vaultStore),
         requestStorePersistent: Boolean(process.env.DATABASE_URL),
+        serverConfigPersistent: configStore.persistent && configStore.loaded,
         requestChannel: 'Lark',
         deliveryChannel: 'Lark',
         lineNestedAccountMenus: true,
@@ -2031,5 +2007,10 @@ const messageRecallTimer = setInterval(() => {
 messageRecallTimer.unref();
 server.on('close', () => clearInterval(messageRecallTimer));
 server.on('close', () => clearInterval(autoApprovalTimer));
-server.listen(port, () => console.log(`Passly: http://localhost:${port}`));
+// Load saved settings (Lark menu, channel credentials) before taking requests. If the
+// database is unreachable, start anyway: env-var settings still work and the next admin
+// save retries the load.
+configStore.load()
+  .catch((error) => console.error('Passly: could not load server settings from the database:', error.message))
+  .finally(() => server.listen(port, () => console.log(`Passly: http://localhost:${port}`)));
 module.exports = server;
